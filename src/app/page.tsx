@@ -1,103 +1,97 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { Web3Provider, useWeb3 } from "./components/Web3Provider";
+import EventCard from "./components/EventCard";
+import { useState } from "react";
+
+// Main content component that uses the Web3 context
+function MainContent() {
+  const { 
+    isConnected, 
+    events, 
+    error, 
+    connect, 
+    disconnect, 
+    contractAddress, 
+    websocketUrl 
+  } = useWeb3();
+
+  // Open contract address in block explorer
+  const openContractExplorer = () => {
+    window.open(`https://explorer.animechain.com/address/${contractAddress}`, '_blank');
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 text-white p-6">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">AnimeChain Explorer</h1>
+        <p className="text-gray-300 mb-4">Monitor events from the EntryPoint contract at {contractAddress}</p>
+        
+        <div className="flex flex-wrap gap-4 mb-6">
+          {isConnected ? (
+            <button 
+              onClick={disconnect}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+            >
+              Disconnect
+            </button>
+          ) : (
+            <button 
+              onClick={connect}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+            >
+              Connect to AnimeChain
+            </button>
+          )}
+          
+          <button 
+            onClick={openContractExplorer}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            View Contract Info
+          </button>
         </div>
+        
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+        </div>
+        
+        {error && (
+          <div className="p-3 bg-red-900/50 border border-red-700 rounded-md text-red-200 mb-4">
+            {error}
+          </div>
+        )}
+      </header>
+
+      <main>
+        <h2 className="text-xl font-semibold mb-4">Contract Events</h2>
+        {events.length === 0 ? (
+          <div className="p-6 bg-slate-700/30 rounded-lg text-center">
+            {isConnected ? 'Waiting for events...' : 'Connect to start monitoring events'}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {events.map((event, index) => (
+              <EventCard key={index} event={event} index={index} />
+            ))}
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      
+      <footer className="mt-12 pt-6 border-t border-slate-700 text-center text-sm text-gray-400">
+        <p>AnimeChain Explorer • WebSocket URL: {websocketUrl}</p>
+        <p className="mt-2">Contract Address: {contractAddress}</p>
       </footer>
     </div>
+  );
+}
+
+// Main Home component that wraps everything with the Web3Provider
+export default function Home() {
+  return (
+    <Web3Provider>
+      <MainContent />
+    </Web3Provider>
   );
 }
