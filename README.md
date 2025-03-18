@@ -1,73 +1,96 @@
 # AnimeChain Explorer
 
-A real-time blockchain explorer for AnimeChain that monitors and displays events from a specific contract.
+A modern, responsive blockchain explorer for AnimeChain, built with Next.js, TypeScript, and Tailwind CSS.
 
 ## Features
 
-- Connect to AnimeChain blockchain via WebSocket
-- Subscribe to contract events from the EntryPoint contract (0x0000000071727De22E5E9d8BAf0edAc6f37da032)
-- Real-time display of blockchain events
-- Detailed event information with raw data viewing
-- Connection status indicator
-- Responsive design
+- Real-time blockchain statistics from the AnimeChain mainnet
+- WebSocket connection to monitor live contract events
+- Interactive JSON-RPC interface for direct blockchain interaction
+- Configurable settings and environment variables
+- Responsive design that works on desktop and mobile
 
-## Technology Stack
-
-- **Next.js** - React framework for the application
-- **TypeScript** - Type safety for JavaScript
-- **Tailwind CSS** - Utility-first CSS framework for styling
-- **Web3.js** - Ethereum JavaScript API for blockchain interaction
-
-## Getting Started
+## Installation
 
 ### Prerequisites
 
-- Node.js (v14+)
+- Node.js (v18 or later)
 - npm or yarn
 
-### Installation
+### Local Development Setup
 
 1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/anime-chain-explorer.git
-   cd anime-chain-explorer
+   ```bash
+   git clone https://github.com/yourusername/AnimeChainExplorer.git
+   cd AnimeChainExplorer
    ```
 
 2. Install dependencies:
-   ```
+   ```bash
    npm install
+   # or
+   yarn install
    ```
 
-3. Run the development server:
-   ```
+3. Start the development server:
+   ```bash
    npm run dev
+   # or
+   yarn dev
    ```
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
-## Usage
+### Production Build
 
-1. Click the "Connect to AnimeChain" button to establish a WebSocket connection to the blockchain.
-2. Once connected, the application will start listening for events from the specified contract address.
-3. Events will be displayed in real-time as they occur on the blockchain.
-4. You can view detailed information for each event, including the raw event data.
-5. Click "View Contract Info" to open the contract address in a blockchain explorer.
-6. Click "Disconnect" to close the WebSocket connection.
+To build the application for production:
 
-## Project Structure
+```bash
+npm run build
+npm start
+# or
+yarn build
+yarn start
+```
 
-- `src/app/page.tsx` - Main page component
-- `src/app/components/Web3Provider.tsx` - Web3 context provider for blockchain connection
-- `src/app/components/EventCard.tsx` - Component to display individual blockchain events
-- `src/app/layout.tsx` - Root layout component
-- `src/app/globals.css` - Global styles
+## Environment Variables
+
+The application uses environment variables for configuration. Create a `.env.local` file in the root directory with the following variables:
+
+```
+NEXT_PUBLIC_ANIME_MAINNET_RPC_URL=https://rpc-animechain-39xf6m45e3.t.conduit.xyz
+NEXT_PUBLIC_ANIME_MAINNET_WS_URL=wss://rpc-animechain-39xf6m45e3.t.conduit.xyz
+```
+
+## Contributing
+
+Contributions are welcome and appreciated! Here's how to contribute:
+
+1. Fork the repository
+2. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Make your changes
+4. Commit your changes:
+   ```bash
+   git commit -m "Add some feature"
+   ```
+5. Push to the branch:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+6. Submit a pull request
+
+### Pull Request Guidelines
+
+- All pull requests should be submitted to the main repository's `main` branch
+- Provide a clear description of the changes made
+- Ensure your code follows the project's style guidelines
+- Make sure all tests pass
+- Update documentation as needed
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgements
-
-- [AnimeChain](https://animechain.com) - Blockchain network
-- [Next.js](https://nextjs.org/)
-- [Web3.js](https://web3js.readthedocs.io/)

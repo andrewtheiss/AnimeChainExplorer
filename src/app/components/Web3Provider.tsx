@@ -2,16 +2,56 @@
 
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import Web3 from 'web3';
+import { config } from '../config';
 
-// Constants
-const CONTRACT_ADDRESS = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
-const WEBSOCKET_URL = "wss://rpc-animechain-39xf6m45e3.t.conduit.xyz";
+// Define proper types for blockchain events
+interface BlockchainEvent {
+  blockNumber?: string;
+  transactionHash?: string;
+  logIndex?: string;
+  data?: string;
+  [key: string]: unknown;
+}
+
+// Types for custom WebSocket provider
+interface WebSocketProviderEvents {
+  connect: () => void;
+  error: (error: Error) => void;
+  end: () => void;
+  disconnect: () => void;
+}
+
+interface WebSocketProvider {
+  on<K extends keyof WebSocketProviderEvents>(event: K, callback: WebSocketProviderEvents[K]): void;
+  disconnect?: () => void;
+}
+
+// Type for Web3 provider
+type SupportedProvider = string | object;
+
+// Custom type for Web3 instance with proper provider typing
+type Web3Instance = Web3 & {
+  currentProvider: unknown;
+};
+
+// Custom type for Web3.eth with subscribe method
+interface EthSubscribe {
+  subscribe: (
+    type: string, 
+    options: { address: string },
+    callback: (error: Error | null, result: BlockchainEvent) => void
+  ) => { unsubscribe: () => void };
+}
+
+// Constants from config
+const CONTRACT_ADDRESS = config.animeChain.entryPointAddress;
+const WEBSOCKET_URL = config.animeChain.mainnet.wsUrl;
 
 // Types
 interface Web3ContextType {
-  web3: Web3 | null;
+  web3: Web3Instance | null;
   isConnected: boolean;
-  events: any[];
+  events: BlockchainEvent[];
   error: string | null;
   connect: () => Promise<void>;
   disconnect: () => void;
@@ -24,11 +64,11 @@ const Web3Context = createContext<Web3ContextType | null>(null);
 
 // Provider Component
 export function Web3Provider({ children }: { children: ReactNode }) {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<BlockchainEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const web3Ref = useRef<Web3 | null>(null);
-  const subscriptionRef = useRef<any>(null);
+  const web3Ref = useRef<Web3Instance | null>(null);
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
   // Connect to blockchain
   const connect = async () => {
@@ -36,8 +76,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       setError(null);
       
       // Create a new web3 instance with WebSocket provider
-      const provider = new Web3.providers.WebsocketProvider(WEBSOCKET_URL);
-      const web3Instance = new Web3(provider);
+      const provider = new Web3.providers.WebsocketProvider(WEBSOCKET_URL) as unknown as WebSocketProvider;
+      // Use type assertion to make the provider compatible with Web3 constructor
+      const web3Instance = new Web3(provider as SupportedProvider) as Web3Instance;
       web3Ref.current = web3Instance;
       
       // Set up connection status handlers
@@ -46,9 +87,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         console.log("Connected to AnimeChain blockchain");
       });
       
-      provider.on("error", (err: any) => {
+      provider.on("error", (err: Error) => {
         console.error("Provider error:", err);
-        setError(`Provider error: ${err.message || err}`);
+        setError(`Provider error: ${err.message}`);
         setIsConnected(false);
       });
       
@@ -59,9 +100,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       
       // Subscribe to contract events
       subscribeToEvents();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Connection error:", err);
-      setError(`Connection error: ${err.message || err}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Connection error: ${errorMessage}`);
       setIsConnected(false);
     }
   };
@@ -77,16 +119,15 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       }
       
       // Subscribe to logs for the specified contract address
-      // Use type assertion to handle the callback TypeScript issue
       const web3 = web3Ref.current;
-      const eth = web3.eth as any;
+      const eth = web3.eth as unknown as EthSubscribe;
       
       const subscription = eth.subscribe('logs', {
         address: CONTRACT_ADDRESS
-      }, (error: any, result: any) => {
+      }, (error: Error | null, result: BlockchainEvent) => {
         if (error) {
           console.error("Subscription error:", error);
-          setError(`Subscription error: ${error.message || error}`);
+          setError(`Subscription error: ${error.message}`);
           return;
         }
         
@@ -95,9 +136,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       });
       
       subscriptionRef.current = subscription;
-    } catch (err: any) {
+    } catch (err) {
       console.error("Subscription setup error:", err);
-      setError(`Subscription setup error: ${err.message || err}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Subscription setup error: ${errorMessage}`);
     }
   };
 
@@ -109,17 +151,18 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         subscriptionRef.current = null;
       }
       
-      if (web3Ref.current && web3Ref.current.currentProvider && 
-          typeof web3Ref.current.currentProvider !== 'string' && 
-          'disconnect' in web3Ref.current.currentProvider) {
-        (web3Ref.current.currentProvider as any).disconnect();
+      if (web3Ref.current && web3Ref.current.currentProvider) {
+        const provider = web3Ref.current.currentProvider as unknown as WebSocketProvider;
+        if (provider && typeof provider !== 'string' && provider.disconnect) {
+          provider.disconnect();
+        }
       }
       
       web3Ref.current = null;
       setIsConnected(false);
       setEvents([]);
       console.log("Disconnected from blockchain");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Disconnect error:", err);
     }
   };

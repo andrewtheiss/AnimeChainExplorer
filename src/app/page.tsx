@@ -2,7 +2,11 @@
 
 import { Web3Provider, useWeb3 } from "./components/Web3Provider";
 import EventCard from "./components/EventCard";
+import ConfigViewer from "./components/ConfigViewer";
+import JsonRpcInterface from "./components/JsonRpcInterface";
+import BlockchainStats from "./components/BlockchainStats";
 import { useState } from "react";
+import { config } from "./config";
 
 // Main content component that uses the Web3 context
 function MainContent() {
@@ -16,9 +20,11 @@ function MainContent() {
     websocketUrl 
   } = useWeb3();
 
+  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats'>('config');
+
   // Open contract address in block explorer
   const openContractExplorer = () => {
-    window.open(`https://explorer.animechain.com/address/${contractAddress}`, '_blank');
+    window.open(`https://explorer-animechain-39xf6m45e3.t.conduit.xyz/address/${contractAddress}`, '_blank');
   };
 
   return (
@@ -64,18 +70,84 @@ function MainContent() {
         )}
       </header>
 
+      {/* Tabs */}
+      <div className="border-b border-slate-700 mb-6">
+        <div className="flex flex-wrap -mb-px">
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'events' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('events')}
+          >
+            Contract Events
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'jsonrpc' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('jsonrpc')}
+          >
+            JSON-RPC
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'stats' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('stats')}
+          >
+            Blockchain Stats
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'config' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('config')}
+          >
+            Configuration
+          </button>
+        </div>
+      </div>
+
       <main>
-        <h2 className="text-xl font-semibold mb-4">Contract Events</h2>
-        {events.length === 0 ? (
-          <div className="p-6 bg-slate-700/30 rounded-lg text-center">
-            {isConnected ? 'Waiting for events...' : 'Connect to start monitoring events'}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {events.map((event, index) => (
-              <EventCard key={index} event={event} index={index} />
-            ))}
-          </div>
+        {/* Events Tab */}
+        {activeTab === 'events' && (
+          <>
+            <h2 className="text-xl font-semibold mb-4">Contract Events</h2>
+            {events.length === 0 ? (
+              <div className="p-6 bg-slate-700/30 rounded-lg text-center">
+                {isConnected ? 'Waiting for events...' : 'Connect to start monitoring events'}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((event, index) => (
+                  <EventCard key={index} event={event} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* JSON-RPC Tab */}
+        {activeTab === 'jsonrpc' && (
+          <JsonRpcInterface defaultRpcUrl={config.animeChain.mainnet.rpcUrl} />
+        )}
+
+        {/* Blockchain Stats Tab */}
+        {activeTab === 'stats' && (
+          <BlockchainStats refreshInterval={30000} />
+        )}
+
+        {/* Configuration Tab */}
+        {activeTab === 'config' && (
+          <ConfigViewer />
         )}
       </main>
       
