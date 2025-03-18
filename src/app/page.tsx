@@ -20,7 +20,7 @@ function MainContent() {
     websocketUrl 
   } = useWeb3();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats'>('config');
+  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats'>('stats');
 
   // Open contract address in block explorer
   const openContractExplorer = () => {

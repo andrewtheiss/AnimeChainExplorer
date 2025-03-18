@@ -1,12 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove the 'output: export' setting to enable API routes
-  // output: 'export',
+  // Enable static export to the /out directory
+  output: 'export',
   // This setting makes static export work correctly with relative paths
   // Only use if you're not using a custom domain
   basePath: '',
   images: {
-    // unoptimized: true, // Required for static export
+    unoptimized: true, // Required for static export
   },
   // Disable server components since we're using client-side WebSocket connectivity
   reactStrictMode: true,
