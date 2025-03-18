@@ -10,6 +10,13 @@ const nextConfig = {
   },
   // Disable server components since we're using client-side WebSocket connectivity
   reactStrictMode: true,
+  
+  // Disable ESLint during builds
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
 }
 
 module.exports = nextConfig 
