@@ -9,6 +9,7 @@ A modern, responsive blockchain explorer for AnimeChain, built with Next.js, Typ
 - Interactive JSON-RPC interface for direct blockchain interaction
 - Configurable settings and environment variables
 - Responsive design that works on desktop and mobile
+- Standalone proxy server for handling API requests
 
 ## Installation
 
@@ -90,59 +91,145 @@ NEXT_PUBLIC_ANIME_MAINNET_WS_URL=wss://rpc-animechain-39xf6m45e3.t.conduit.xyz
 
 ## API Proxy for CORS Issues
 
-The application uses local API routes to handle CORS issues when fetching data from the AnimeChain Explorer API. The proxies are implemented using Next.js API routes under `src/app/api/blockchain/`.
+The application uses a dedicated proxy server located at `proxy.animechainexplorer.com` to handle CORS issues when fetching data from the AnimeChain Explorer API. 
 
-### Available API Routes
+### Frontend Configuration
+
+The frontend is configured to use the proxy server automatically via the `NEXT_PUBLIC_PROXY_URL` environment variable. If this variable is not set, it defaults to `https://proxy.animechainexplorer.com`.
+
+### Available API Endpoints on the Proxy Server
 
 - `/api/blockchain/stats` - Fetches general blockchain statistics
 - `/api/blockchain/transactions` - Fetches transaction data (supports query parameters)
+- `/api/blockchain/blocks` - Fetches block data (supports query parameters)
 - `/api/blockchain/proxy?endpoint=<endpoint>` - General proxy for any explorer endpoint
+- `/health` - Health check endpoint
 
-### Important Configuration Notes
+## Standalone Proxy Server Setup
 
-All API routes are configured with:
-- `export const dynamic = 'force-dynamic'` - Ensures routes are always generated at request time
-- `export const revalidate = 0` - Prevents caching of API responses
+The project includes a standalone proxy server in the `proxy` directory. This server can be deployed separately from the main application to handle API requests and avoid CORS issues.
 
-These settings are required for proper functionality in both development and production modes.
+### Setup Instructions for Proxy Server
 
-### Usage Examples
-
-```typescript
-// Fetch blockchain stats
-const statsResponse = await fetch('/api/blockchain/stats');
-const stats = await statsResponse.json();
-
-// Fetch transactions with query parameters
-const txResponse = await fetch('/api/blockchain/transactions?page=1&items=10');
-const transactions = await txResponse.json();
-
-// Use the general proxy for any endpoint
-const blocksResponse = await fetch('/api/blockchain/proxy?endpoint=blocks&page=1');
-const blocks = await blocksResponse.json();
-```
-
-### Troubleshooting CORS Issues
-
-If you encounter CORS errors when running the application locally:
-
-1. **Verify Next.js Configuration** - Make sure `next.config.js` does NOT have `output: 'export'` enabled if you're using API routes.
-
-2. **Verify API Routes** - Make sure you're using the application's built-in API routes instead of direct calls to external APIs.
-
-3. **Check Dynamic Export Configuration** - All API route files must include `export const dynamic = 'force-dynamic'` at the top of the file to work correctly.
-
-4. **Clear Cache** - Try clearing your browser cache or using incognito mode.
-
-5. **Restart Development Server** - Sometimes a simple restart of the development server can resolve issues:
+1. Navigate to the proxy server directory:
    ```bash
-   # Press Ctrl+C to stop the server, then:
-   npm run dev
+   cd proxy
    ```
 
-6. **Check Network Logs** - Use your browser's developer tools to check the network tab for specific error messages.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-7. **Proxy All Requests** - If you're still having issues with a specific endpoint, use the general proxy route (`/api/blockchain/proxy?endpoint=...`) which can handle any explorer endpoint.
+3. Configure the environment variables by creating a `.env` file based on the provided `.env.example`:
+   ```bash
+   cp .env.example .env
+   # Edit the .env file with your specific configuration
+   ```
+
+4. Start the proxy server:
+   ```bash
+   # For development with auto-reloading
+   npm run dev
+   
+   # For production
+   npm start
+   ```
+
+### Configuring a Domain for the Proxy Server
+
+To set up the proxy server at `proxy.animechainexplorer.com`:
+
+1. Deploy the proxy server to your hosting provider (e.g., DigitalOcean, AWS, Heroku, etc.)
+
+2. Configure DNS settings for the subdomain `proxy.animechainexplorer.com` to point to your deployed server.
+
+3. Set up a reverse proxy (such as Nginx or Apache) with SSL certificates.
+
+### Example Nginx Configuration for the Proxy Server
+
+```nginx
+server {
+    listen 80;
+    server_name proxy.animechainexplorer.com;
+    
+    # Redirect HTTP to HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name proxy.animechainexplorer.com;
+    
+    # SSL configuration
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    
+    # Proxy settings
+    location / {
+        proxy_pass http://127.0.0.1:3001;  # Assuming your proxy server runs on port 3001
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### Using PM2 for Production Deployment
+
+It's recommended to use PM2 for running the proxy server in production:
+
+1. Install PM2 globally:
+   ```bash
+   npm install -g pm2
+   ```
+
+2. Start the proxy server with PM2:
+   ```bash
+   pm2 start server.js --name "animechain-proxy"
+   ```
+
+3. Configure PM2 to start on system boot:
+   ```bash
+   pm2 startup
+   pm2 save
+   ```
+
+### Troubleshooting Proxy Issues
+
+If you encounter issues with the proxy server:
+
+1. **Check Logs** - Check the server logs for error messages:
+   ```bash
+   # If running with PM2
+   pm2 logs animechain-proxy
+   
+   # If running directly
+   npm start
+   ```
+
+2. **Verify CORS Configuration** - Make sure the `ALLOWED_ORIGINS` environment variable includes your frontend domain.
+
+3. **Test Connectivity** - Use a tool like `curl` to test API endpoints:
+   ```bash
+   curl https://proxy.animechainexplorer.com/health
+   ```
+
+4. **Check Firewall Settings** - Ensure your server's firewall allows traffic on the configured port.
+
+5. **Verify Nginx Configuration** - If using Nginx, check the configuration and logs:
+   ```bash
+   nginx -t                           # Test configuration
+   sudo systemctl restart nginx       # Restart Nginx
+   sudo journalctl -u nginx           # Check Nginx logs
+   ```
 
 ## Contributing
 
