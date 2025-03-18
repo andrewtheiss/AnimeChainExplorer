@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { fetchBlockchainStats } from '../utils/api';
 
 // Define types for the stats response
 interface BlockchainStats {
@@ -35,21 +36,12 @@ export default function BlockchainStats({ refreshInterval = 60000 }: BlockchainS
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Explorer API URL - mainnet
-  const EXPLORER_API_URL = "https://explorer-animechain-39xf6m45e3.t.conduit.xyz/api/v2/stats";
-
   const fetchStats = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch(EXPLORER_API_URL);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json() as BlockchainStats;
+      const data = await fetchBlockchainStats();
       setStats(data);
       setLastUpdated(new Date());
     } catch (err) {
