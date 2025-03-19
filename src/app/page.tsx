@@ -5,6 +5,7 @@ import EventCard from "./components/EventCard";
 import ConfigViewer from "./components/ConfigViewer";
 import JsonRpcInterface from "./components/JsonRpcInterface";
 import BlockchainStats from "./components/BlockchainStats";
+import BridgeInterface from "./components/BridgeInterface";
 import { useState } from "react";
 import { config } from "./config";
 
@@ -20,7 +21,7 @@ function MainContent() {
     websocketUrl 
   } = useWeb3();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats'>('stats');
+  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats' | 'bridge'>('stats');
 
   // Open contract address in block explorer
   const openContractExplorer = () => {
@@ -105,6 +106,16 @@ function MainContent() {
           </button>
           <button
             className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'bridge' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('bridge')}
+          >
+            Bridge
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
               activeTab === 'config' 
                 ? 'border-blue-500 text-blue-500' 
                 : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
@@ -143,6 +154,11 @@ function MainContent() {
         {/* Blockchain Stats Tab */}
         {activeTab === 'stats' && (
           <BlockchainStats refreshInterval={30000} />
+        )}
+
+        {/* Bridge Tab */}
+        {activeTab === 'bridge' && (
+          <BridgeInterface />
         )}
 
         {/* Configuration Tab */}
