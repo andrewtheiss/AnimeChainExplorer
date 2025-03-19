@@ -73,13 +73,14 @@ const BRIDGE_ABI = [
 
 // Constants for the bridge
 const BRIDGE_CONTRACT_ADDRESS = '0xA203252940839c8482dD4b938b4178f842E343D7';
-const DEFAULT_TO_ADDRESS = '0x5f0aBD2b1988640C45efa24d09947290C98172cf';
+const DEFAULT_TO_ADDRESS = '0x3d069D76169DdC010B8f12d1bA03eAE945f879b3';
 const DEFAULT_DATA = ethers.utils.toUtf8Bytes('superbridge');
 
 // Successful transaction parameter values
-const DEFAULT_MAX_SUBMISSION_COST = '10392480000000';
+const DEFAULT_MAX_SUBMISSION_COST = '592196220000000';
 const DEFAULT_GAS_LIMIT = '300000';
-const DEFAULT_MAX_FEE_PER_GAS = '60000000';
+const DEFAULT_TX_GAS_LIMIT = '500000';
+const DEFAULT_MAX_FEE_PER_GAS = '36000000';
 
 export default function BridgeInterface() {
   // State variables
@@ -94,26 +95,56 @@ export default function BridgeInterface() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
-  // Form state
+  // Form state with display values (user-friendly)
   const [formData, setFormData] = useState({
     to: DEFAULT_TO_ADDRESS,
-    l2CallValue: ethers.utils.parseEther('0.01').toString(), // Default to 0.01 ETH instead of 1 ETH
+    // Display value is 2.5 ANIME (user-friendly) matching the provided value
+    displayL2CallValue: '2.5',
     maxSubmissionCost: DEFAULT_MAX_SUBMISSION_COST,
     excessFeeRefundAddress: DEFAULT_TO_ADDRESS,
     callValueRefundAddress: DEFAULT_TO_ADDRESS,
-    gasLimit: DEFAULT_GAS_LIMIT,
-    maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS,
-    data: 'superbridge',
-    // Add a new field for transaction-level gas limit
-    txGasLimit: '10000000'
+    gasLimit: DEFAULT_GAS_LIMIT, // L2 gas limit
+    maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS, // Added for the bridge contract param
+    data: '', // Empty data according to valid transaction
+    txGasLimit: DEFAULT_TX_GAS_LIMIT // Transaction gas limit as fallback
   });
 
-  // Calculate the token total fee amount (l2CallValue + maxSubmissionCost)
+  // Get the actual L2CallValue in wei from the display value
+  const getL2CallValueInWei = () => {
+    try {
+      // Parse the display value and convert to wei
+      return ethers.utils.parseEther(formData.displayL2CallValue).toString();
+    } catch (err) {
+      console.error('Error converting L2CallValue to wei:', err);
+      return ethers.utils.parseEther('1').toString(); // Default to 1 ANIME in wei if there's an error
+    }
+  };
+
+  // Calculate the token total fee amount (l2CallValue + maxSubmissionCost + additional fee)
   const calculateTokenTotalFeeAmount = () => {
     try {
-      const l2CallValue = ethers.BigNumber.from(formData.l2CallValue);
+      const l2CallValue = ethers.BigNumber.from(getL2CallValueInWei());
       const maxSubmissionCost = ethers.BigNumber.from(formData.maxSubmissionCost);
-      return l2CallValue.add(maxSubmissionCost).toString();
+      
+      // First calculate the base amount (l2CallValue + maxSubmissionCost)
+      const baseAmount = l2CallValue.add(maxSubmissionCost);
+      
+      // Now add approximately 20% more to account for additional fees
+      // Calculate 20% of maxSubmissionCost
+      const additionalFee = maxSubmissionCost.mul(20).div(100);
+      
+      // The total is the base amount plus the additional fee
+      const total = baseAmount.add(additionalFee);
+      
+      console.log("Calculated token total fee:", {
+        l2CallValue: l2CallValue.toString(), 
+        maxSubmissionCost: maxSubmissionCost.toString(),
+        baseAmount: baseAmount.toString(),
+        additionalFee: additionalFee.toString(),
+        total: total.toString()
+      });
+      
+      return total.toString();
     } catch (err) {
       console.error('Error calculating token total fee:', err);
       return '0';
@@ -150,8 +181,13 @@ export default function BridgeInterface() {
       const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
       const account = accounts[0];
       
-      // Create provider
-      const provider = new ethers.providers.Web3Provider(ethereum);
+      // Create provider with ENS disabled
+      const provider = new ethers.providers.Web3Provider(ethereum, {
+        name: 'arbitrum',
+        chainId: 42161,
+        ensAddress: undefined // Explicitly disable ENS lookups
+      });
+      
       const network = await provider.getNetwork();
       
       // Check if connected to Arbitrum network (chainId 42161)
@@ -165,8 +201,13 @@ export default function BridgeInterface() {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0xA4B1' }], // 0xA4B1 is hex for 42161
           });
-          // Refresh provider after network switch
-          const updatedProvider = new ethers.providers.Web3Provider(ethereum);
+          // Refresh provider after network switch with ENS disabled
+          const updatedProvider = new ethers.providers.Web3Provider(ethereum, {
+            name: 'arbitrum',
+            chainId: 42161,
+            ensAddress: undefined // Explicitly disable ENS lookups
+          });
+          
           const updatedNetwork = await updatedProvider.getNetwork();
           setIsArbitrumNetwork(updatedNetwork.chainId === 42161);
           setProvider(updatedProvider);
@@ -207,8 +248,13 @@ export default function BridgeInterface() {
       const signer = provider.getSigner();
       setSigner(signer);
       
-      // Create contract instance
-      const contract = new ethers.Contract(BRIDGE_CONTRACT_ADDRESS, BRIDGE_ABI, signer);
+      // Create contract instance with explicit address (no ENS resolution)
+      const contract = new ethers.Contract(
+        BRIDGE_CONTRACT_ADDRESS, 
+        BRIDGE_ABI, 
+        signer
+      );
+      
       setBridgeContract(contract);
       
       setAccount(account);
@@ -276,45 +322,66 @@ export default function BridgeInterface() {
     try {
       setIsLoading(true);
       
-      // Convert data to bytes
-      const dataBytes = ethers.utils.toUtf8Bytes(formData.data);
+      // Ensure all addresses are checksummed or in proper format
+      const toAddress = ethers.utils.getAddress(formData.to); // Properly format address
+      const excessFeeRefundAddress = ethers.utils.getAddress(formData.excessFeeRefundAddress);
+      const callValueRefundAddress = ethers.utils.getAddress(formData.callValueRefundAddress);
+      
+      // Use empty bytes array for data
+      const dataBytes = formData.data ? ethers.utils.toUtf8Bytes(formData.data) : [];
+      
+      // Get L2CallValue in wei for the transaction
+      const l2CallValueInWei = getL2CallValueInWei();
       
       // Calculate token total fee amount
       const tokenTotalFeeAmount = calculateTokenTotalFeeAmount();
       
+      // Only set the gas limit, let MetaMask handle gas prices
+      const transactionRequest = {
+        gasLimit: ethers.BigNumber.from(formData.txGasLimit),
+        value: ethers.constants.Zero // Explicitly set to zero
+      };
+      
       // Display debug info before sending transaction
       setDebugInfo(JSON.stringify({
         params: {
-          to: formData.to,
-          l2CallValue: formData.l2CallValue,
-          l2CallValueReadable: ethers.utils.formatEther(formData.l2CallValue) + ' ETH',
+          to: toAddress,
+          l2CallValue: l2CallValueInWei,
+          l2CallValueReadable: formData.displayL2CallValue + ' ANIME',
           maxSubmissionCost: formData.maxSubmissionCost,
-          excessFeeRefundAddress: formData.excessFeeRefundAddress,
-          callValueRefundAddress: formData.callValueRefundAddress,
+          excessFeeRefundAddress: excessFeeRefundAddress,
+          callValueRefundAddress: callValueRefundAddress,
           gasLimit: formData.gasLimit,
           maxFeePerGas: formData.maxFeePerGas,
           tokenTotalFeeAmount: tokenTotalFeeAmount,
           tokenTotalFeeAmountReadable: ethers.utils.formatEther(tokenTotalFeeAmount) + ' ETH',
-          data: formData.data,
-          txGasLimit: formData.txGasLimit
-        }
+          verificationMatches: {
+            expectedTokenTotalFee: '2500592196220000000' === tokenTotalFeeAmount ? 'Match' : 'Mismatch',
+            expectedL2CallValue: '2500000000000000000' === l2CallValueInWei ? 'Match' : 'Mismatch',
+          },
+          data: formData.data ? formData.data : 'empty',
+          txGasLimit: formData.txGasLimit,
+          sendingValueWithTx: "No - Transaction is not payable",
+          gasSettings: {
+            note: "Using MetaMask's suggested gas prices for this transaction",
+            maxFeePerGas: formData.maxFeePerGas + " (for bridge contract parameter)"
+          }
+        },
+        transactionRequest: transactionRequest
       }, null, 2));
       
-      // Call the bridge contract with explicit gas limit
+      // Call the bridge contract with the configured transaction request
       const tx = await bridgeContract.createRetryableTicket(
-        formData.to,
-        formData.l2CallValue,
+        toAddress, // Use properly formatted address
+        l2CallValueInWei,
         formData.maxSubmissionCost,
-        formData.excessFeeRefundAddress,
-        formData.callValueRefundAddress,
+        excessFeeRefundAddress, // Use properly formatted address
+        callValueRefundAddress, // Use properly formatted address
         formData.gasLimit,
-        formData.maxFeePerGas,
+        formData.maxFeePerGas, // Use the provided maxFeePerGas value
         tokenTotalFeeAmount,
         dataBytes,
-        {
-          value: tokenTotalFeeAmount, // Send ETH with the transaction
-          gasLimit: ethers.BigNumber.from(formData.txGasLimit) // Use custom gas limit
-        }
+        transactionRequest
       );
       
       setDebugInfo(prev => 
@@ -461,15 +528,15 @@ export default function BridgeInterface() {
               type="button"
               onClick={() => {
                 setFormData({
-                  to: DEFAULT_TO_ADDRESS,
-                  l2CallValue: ethers.utils.parseEther('0.01').toString(),
+                  to: account || DEFAULT_TO_ADDRESS,
+                  displayL2CallValue: '2.5',
                   maxSubmissionCost: DEFAULT_MAX_SUBMISSION_COST,
                   excessFeeRefundAddress: account || DEFAULT_TO_ADDRESS,
                   callValueRefundAddress: account || DEFAULT_TO_ADDRESS,
                   gasLimit: DEFAULT_GAS_LIMIT,
                   maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS,
-                  data: 'superbridge',
-                  txGasLimit: '10000000'
+                  data: '', // Empty data field
+                  txGasLimit: DEFAULT_TX_GAS_LIMIT
                 });
               }}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm"
@@ -500,18 +567,21 @@ export default function BridgeInterface() {
           
           <div>
             <label className="block text-sm text-gray-300 mb-1">
-              L2 Call Value (ETH)
+              ANIME Amount to Bridge
             </label>
             <input
               type="text"
-              name="l2CallValue"
-              value={formData.l2CallValue}
+              name="displayL2CallValue"
+              value={formData.displayL2CallValue}
               onChange={handleInputChange}
               className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-              placeholder="Amount in wei"
+              placeholder="Amount in ANIME"
               required
             />
-            <p className="text-xs text-gray-400 mt-1">Default: 0.01 ETH in wei</p>
+            <div className="flex justify-between">
+              <p className="text-xs text-gray-400 mt-1">Enter amount in ANIME (e.g. 1, 2.5, etc.)</p>
+              <p className="text-xs text-gray-300 mt-1 font-mono">= {getL2CallValueInWei()} wei</p>
+            </div>
           </div>
         </div>
         
@@ -579,32 +649,17 @@ export default function BridgeInterface() {
               value={formData.gasLimit}
               onChange={handleInputChange}
               className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-              placeholder="Gas limit in wei"
+              placeholder="Gas limit"
               required
             />
-            <p className="text-xs text-gray-400 mt-1">Increased to avoid estimation issues</p>
+            <p className="text-xs text-gray-400 mt-1">L2 execution gas limit: {DEFAULT_GAS_LIMIT}</p>
           </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">
-              Max Fee Per Gas
-            </label>
-            <input
-              type="text"
-              name="maxFeePerGas"
-              value={formData.maxFeePerGas}
-              onChange={handleInputChange}
-              className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-              placeholder="Fee in wei"
-              required
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Data
+              Data (Optional)
             </label>
             <input
               type="text"
@@ -612,36 +667,109 @@ export default function BridgeInterface() {
               value={formData.data}
               onChange={handleInputChange}
               className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-              placeholder="Data bytes"
-              required
+              placeholder="Data bytes (can be empty)"
             />
+            <p className="text-xs text-gray-400 mt-1">Successful transactions typically use empty data</p>
           </div>
         </div>
         
-        <div className="bg-slate-700/30 p-4 rounded-lg">
-          <h3 className="text-sm font-semibold mb-2">Transaction Gas Limit</h3>
-          <input
-            type="text"
-            name="txGasLimit"
-            value={formData.txGasLimit}
-            onChange={handleInputChange}
-            className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-            placeholder="Gas limit for transaction"
-            required
-          />
-          <p className="text-xs text-gray-400 mt-1">Gas limit for the entire transaction (not L2 gas limit)</p>
+        <div className="bg-slate-700/30 p-4 rounded-lg mt-4">
+          <h3 className="text-sm font-semibold mb-2">Transaction Gas Settings</h3>
+          
+          <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-md">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-blue-200">
+                Gas prices will be determined by MetaMask based on current network conditions.
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs text-gray-300 mb-1">
+                L2 Gas Limit
+              </label>
+              <input
+                type="text"
+                name="gasLimit"
+                value={formData.gasLimit}
+                onChange={handleInputChange}
+                className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
+                placeholder="Gas limit"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">L2 execution gas limit: {DEFAULT_GAS_LIMIT}</p>
+            </div>
+            
+            <div>
+              <label className="block text-xs text-gray-300 mb-1">
+                Transaction Gas Limit (Fallback)
+              </label>
+              <input
+                type="text"
+                name="txGasLimit"
+                value={formData.txGasLimit}
+                onChange={handleInputChange}
+                className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
+                placeholder="Gas limit for transaction"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">MetaMask may override this value</p>
+            </div>
+          </div>
         </div>
         
-        <div className="bg-slate-700/30 p-4 rounded-lg">
+        <div className="bg-slate-700/30 p-4 rounded-lg mt-4">
           <h3 className="text-sm font-semibold mb-2">Token Total Fee Amount (Calculated)</h3>
           <p className="font-mono text-sm break-all">{calculateTokenTotalFeeAmount()}</p>
           <p className="text-sm break-all">≈ {ethers.utils.formatEther(calculateTokenTotalFeeAmount())} ETH</p>
-          <p className="text-xs text-gray-400 mt-1">This is automatically calculated as l2CallValue + maxSubmissionCost</p>
+          
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-gray-400">L2 Call Value:</p>
+              <p className="font-mono text-xs">{getL2CallValueInWei()} wei</p>
+              <p className="text-xs text-gray-400">= {formData.displayL2CallValue} ANIME</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Max Submission Cost:</p>
+              <p className="font-mono text-xs">{formData.maxSubmissionCost} wei</p>
+            </div>
+          </div>
+          
+          <p className="text-xs text-gray-400 mt-2">
+            This is calculated as: (l2CallValue + maxSubmissionCost) + 20% of maxSubmissionCost
+          </p>
+          
+          <div className="mt-2 p-2 bg-indigo-800/30 border border-indigo-700/40 rounded-md">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-xs text-indigo-300">
+                <p><strong>Calculation Breakdown:</strong></p>
+                <p>Base Amount: {ethers.utils.formatEther(ethers.BigNumber.from(getL2CallValueInWei()).add(ethers.BigNumber.from(formData.maxSubmissionCost)))} ETH</p>
+                <p>Additional Fee: {ethers.utils.formatEther(ethers.BigNumber.from(formData.maxSubmissionCost).mul(20).div(100))} ETH</p>
+                <p>Total: {ethers.utils.formatEther(calculateTokenTotalFeeAmount())} ETH</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-2 p-2 bg-blue-800/30 border border-blue-700/40 rounded-md">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-blue-300">No ETH value is sent with this transaction. The bridge contract is not payable.</p>
+            </div>
+          </div>
         </div>
         
         <button
           type="submit"
-          className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
+          className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 rounded-md transition-colors mt-4"
           disabled={!isConnected || isLoading || !isArbitrumNetwork}
         >
           {isLoading ? 'Processing...' : 'Create Bridge Transaction'}
