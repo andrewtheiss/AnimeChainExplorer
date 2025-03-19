@@ -87,15 +87,16 @@ export default function BridgeInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
     to: DEFAULT_TO_ADDRESS,
-    l2CallValue: ethers.utils.parseEther('1').toString(), // Default 1 ETH instead of 50000
+    l2CallValue: ethers.utils.parseEther('0.01').toString(), // Default to 0.01 ETH instead of 1 ETH
     maxSubmissionCost: '10392480000000',
     excessFeeRefundAddress: DEFAULT_TO_ADDRESS,
     callValueRefundAddress: DEFAULT_TO_ADDRESS,
-    gasLimit: '300000',
+    gasLimit: '5000000', // Increased gas limit to avoid estimation issues
     maxFeePerGas: '60000000',
     data: 'superbridge'
   });
@@ -112,9 +113,20 @@ export default function BridgeInterface() {
     }
   };
 
+  // Update form addresses with connected wallet
+  const updateFormAddresses = (walletAddress: string) => {
+    setFormData(prev => ({
+      ...prev,
+      to: walletAddress,
+      excessFeeRefundAddress: walletAddress,
+      callValueRefundAddress: walletAddress
+    }));
+  };
+
   // Connect to MetaMask
   const connectWallet = async () => {
     setError(null);
+    setDebugInfo(null);
     
     // Get the ethereum object from window, using type assertion
     const ethereum = (window as unknown as EthereumWindow).ethereum;
@@ -195,6 +207,10 @@ export default function BridgeInterface() {
       setAccount(account);
       setIsConnected(true);
       setError(null);
+      
+      // Automatically update form addresses with the connected wallet address
+      updateFormAddresses(account);
+      
     } catch (err: any) {
       console.error('Error connecting wallet:', err);
       setError(`Failed to connect wallet: ${err.message || 'Unknown error'}`);
@@ -213,6 +229,15 @@ export default function BridgeInterface() {
     setIsArbitrumNetwork(false);
     setError(null);
     setTxHash(null);
+    setDebugInfo(null);
+    
+    // Reset form addresses to defaults
+    setFormData(prev => ({
+      ...prev,
+      to: DEFAULT_TO_ADDRESS,
+      excessFeeRefundAddress: DEFAULT_TO_ADDRESS,
+      callValueRefundAddress: DEFAULT_TO_ADDRESS
+    }));
   };
 
   // Handle form input changes
@@ -229,6 +254,7 @@ export default function BridgeInterface() {
     e.preventDefault();
     setError(null);
     setTxHash(null);
+    setDebugInfo(null);
     
     if (!bridgeContract || !signer) {
       setError('Wallet not connected or bridge contract not initialized');
@@ -249,7 +275,30 @@ export default function BridgeInterface() {
       // Calculate token total fee amount
       const tokenTotalFeeAmount = calculateTokenTotalFeeAmount();
       
-      // Call the bridge contract
+      // Prepare transaction parameters
+      const txParams = {
+        to: formData.to,
+        l2CallValue: formData.l2CallValue,
+        maxSubmissionCost: formData.maxSubmissionCost,
+        excessFeeRefundAddress: formData.excessFeeRefundAddress,
+        callValueRefundAddress: formData.callValueRefundAddress,
+        gasLimit: formData.gasLimit,
+        maxFeePerGas: formData.maxFeePerGas,
+        tokenTotalFeeAmount: tokenTotalFeeAmount,
+        data: dataBytes
+      };
+      
+      // Display debug info
+      setDebugInfo(JSON.stringify({
+        params: {
+          ...txParams,
+          tokenTotalFeeAmount: ethers.utils.formatEther(tokenTotalFeeAmount) + ' ETH',
+          l2CallValue: ethers.utils.formatEther(formData.l2CallValue) + ' ETH',
+          data: formData.data
+        }
+      }, null, 2));
+      
+      // Call the bridge contract with explicit gas limit to avoid estimation errors
       const tx = await bridgeContract.createRetryableTicket(
         formData.to,
         formData.l2CallValue,
@@ -261,17 +310,31 @@ export default function BridgeInterface() {
         tokenTotalFeeAmount,
         dataBytes,
         {
-          value: tokenTotalFeeAmount // Send ETH with the transaction
+          value: tokenTotalFeeAmount, // Send ETH with the transaction
+          gasLimit: ethers.utils.hexlify(10000000) // Explicit gas limit
         }
       );
       
       // Wait for transaction to be mined
-      await tx.wait();
+      const receipt = await tx.wait();
       
       setTxHash(tx.hash);
+      setDebugInfo(prev => prev + '\n\nTransaction success! Receipt: ' + JSON.stringify(receipt, null, 2));
     } catch (err: any) {
       console.error('Error creating bridge transaction:', err);
-      setError(`Failed to create bridge transaction: ${err.message || 'Unknown error'}`);
+      let errorMessage = `Failed to create bridge transaction: ${err.message || 'Unknown error'}`;
+      
+      // Enhanced error debugging
+      if (err.code === 'UNPREDICTABLE_GAS_LIMIT') {
+        errorMessage = 'Transaction simulation failed. This could be due to insufficient funds, incorrect parameters, or contract restrictions.';
+      }
+      
+      setError(errorMessage);
+      setDebugInfo(prev => prev + '\n\nTransaction error: ' + JSON.stringify({
+        error: err.message,
+        code: err.code,
+        details: err.data ? err.data.message : 'No additional details'
+      }, null, 2));
     } finally {
       setIsLoading(false);
     }
@@ -289,6 +352,8 @@ export default function BridgeInterface() {
         } else if (accounts[0] !== account) {
           // Account changed, update state
           setAccount(accounts[0]);
+          // Update form addresses with new account
+          updateFormAddresses(accounts[0]);
         }
       };
       
@@ -377,6 +442,9 @@ export default function BridgeInterface() {
               placeholder="0x..."
               required
             />
+            {isConnected && (
+              <p className="text-xs text-gray-400 mt-1">Using your connected wallet address</p>
+            )}
           </div>
           
           <div>
@@ -392,7 +460,7 @@ export default function BridgeInterface() {
               placeholder="Amount in wei"
               required
             />
-            <p className="text-xs text-gray-400 mt-1">Default: 1 ETH in wei</p>
+            <p className="text-xs text-gray-400 mt-1">Default: 0.01 ETH in wei</p>
           </div>
         </div>
         
@@ -425,6 +493,9 @@ export default function BridgeInterface() {
               placeholder="0x..."
               required
             />
+            {isConnected && (
+              <p className="text-xs text-gray-400 mt-1">Using your connected wallet address</p>
+            )}
           </div>
         </div>
         
@@ -442,6 +513,9 @@ export default function BridgeInterface() {
               placeholder="0x..."
               required
             />
+            {isConnected && (
+              <p className="text-xs text-gray-400 mt-1">Using your connected wallet address</p>
+            )}
           </div>
           
           <div>
@@ -457,6 +531,7 @@ export default function BridgeInterface() {
               placeholder="Gas limit in wei"
               required
             />
+            <p className="text-xs text-gray-400 mt-1">Increased to avoid estimation issues</p>
           </div>
         </div>
         
@@ -495,6 +570,7 @@ export default function BridgeInterface() {
         <div className="bg-slate-700/30 p-4 rounded-lg">
           <h3 className="text-sm font-semibold mb-2">Token Total Fee Amount (Calculated)</h3>
           <p className="font-mono text-sm break-all">{calculateTokenTotalFeeAmount()}</p>
+          <p className="text-sm break-all">≈ {ethers.utils.formatEther(calculateTokenTotalFeeAmount())} ETH</p>
           <p className="text-xs text-gray-400 mt-1">This is automatically calculated as l2CallValue + maxSubmissionCost</p>
         </div>
         
@@ -506,6 +582,15 @@ export default function BridgeInterface() {
           {isLoading ? 'Processing...' : 'Create Bridge Transaction'}
         </button>
       </form>
+      
+      {debugInfo && (
+        <div className="mt-4 p-4 bg-gray-900 rounded-lg">
+          <h3 className="text-sm font-semibold mb-2 text-gray-300">Debug Information</h3>
+          <pre className="text-xs text-gray-400 overflow-auto max-h-60 p-2 bg-black bg-opacity-50 rounded">
+            {debugInfo}
+          </pre>
+        </div>
+      )}
       
       <div className="mt-6 border-t border-slate-700 pt-4">
         <h3 className="text-sm font-semibold mb-2">About This Bridge</h3>
