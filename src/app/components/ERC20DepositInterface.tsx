@@ -98,6 +98,7 @@ export default function ERC20DepositInterface() {
   const [isApproved, setIsApproved] = useState(false);
   const [depositStep, setDepositStep] = useState<'approve' | 'deposit'>('approve');
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
+  const [isTwoStepMode, setIsTwoStepMode] = useState(true);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -295,11 +296,11 @@ export default function ERC20DepositInterface() {
       // Use safe checksum function
       const checksummedBridgeAddress = safeChecksum(BRIDGE_CONTRACT_ADDRESS);
       
-      // Gas settings
+      // Let MetaMask handle gas estimation - don't specify gas params
+      // Only set gas limit as a fallback
       const gasSettings = {
-        gasLimit: ethers.BigNumber.from(formData.gasLimit),
-        maxFeePerGas: ethers.utils.parseUnits(formData.maxFeePerGas, 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.parseUnits(formData.maxPriorityFeePerGas, 'gwei')
+        gasLimit: ethers.BigNumber.from(formData.gasLimit)
+        // Removed maxFeePerGas and maxPriorityFeePerGas to use network defaults
       };
       
       // Display debug info before sending transaction
@@ -309,7 +310,7 @@ export default function ERC20DepositInterface() {
           amount: formData.amount,
           amountWei: amountInWei.toString(),
           fromAddress: account,
-          gasSettings
+          gasSettings: "Using MetaMask suggested gas values"
         }
       }, null, 2));
       
@@ -386,11 +387,11 @@ export default function ERC20DepositInterface() {
       // Convert amount to wei
       const amountInWei = ethers.utils.parseEther(formData.amount);
       
-      // Gas settings
+      // Let MetaMask handle gas estimation - don't specify gas params
+      // Only set gas limit as a fallback
       const gasSettings = {
-        gasLimit: ethers.BigNumber.from(formData.gasLimit),
-        maxFeePerGas: ethers.utils.parseUnits(formData.maxFeePerGas, 'gwei'),
-        maxPriorityFeePerGas: ethers.utils.parseUnits(formData.maxPriorityFeePerGas, 'gwei')
+        gasLimit: ethers.BigNumber.from(formData.gasLimit)
+        // Removed maxFeePerGas and maxPriorityFeePerGas to use network defaults
       };
       
       // Display debug info before sending transaction
@@ -399,7 +400,7 @@ export default function ERC20DepositInterface() {
           amount: formData.amount,
           amountWei: amountInWei.toString(),
           fromAddress: account,
-          gasSettings
+          gasSettings: "Using MetaMask suggested gas values"
         }
       }, null, 2));
       
@@ -431,6 +432,100 @@ export default function ERC20DepositInterface() {
       // Reset for next deposit
       setIsApproved(false);
       setDepositStep('approve');
+      
+      // Update token balance
+      if (account && tokenContract) {
+        await fetchTokenBalance(account, tokenContract);
+      }
+    } catch (err: any) {
+      console.error('Error depositing tokens:', err);
+      let errorMessage = `Failed to deposit tokens: ${err.message || 'Unknown error'}`;
+      
+      if (err.code === 'UNPREDICTABLE_GAS_LIMIT') {
+        errorMessage = 'Transaction simulation failed. This could be due to insufficient funds or invalid parameters.';
+      } else if (err.code === 'CALL_EXCEPTION') {
+        errorMessage = 'Transaction failed on-chain. The bridge contract rejected the transaction.';
+      } else if (err.code === 'INVALID_ARGUMENT') {
+        errorMessage = 'Invalid argument: This may be due to an incorrect address format. Addresses are being corrected.';
+      }
+      
+      setError(errorMessage);
+      setDebugInfo(prev => prev + '\n\nDeposit error: ' + JSON.stringify({
+        error: err.message,
+        code: err.code,
+        details: err.data ? err.data.message : 'No additional details'
+      }, null, 2));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Direct deposit function (bypassing the approval step)
+  const directDepositTokens = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setTxHash(null);
+    setDebugInfo(null);
+    
+    if (!bridgeContract || !signer || !account) {
+      setError('Wallet not connected or bridge contract not initialized');
+      return;
+    }
+    
+    if (!isArbitrumNetwork) {
+      setError('Please connect to Arbitrum network');
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Convert amount to wei
+      const amountInWei = ethers.utils.parseEther(formData.amount);
+      
+      // Let MetaMask handle gas estimation - don't specify gas params
+      // Only set gas limit as a fallback
+      const gasSettings = {
+        gasLimit: ethers.BigNumber.from(formData.gasLimit)
+        // Removed maxFeePerGas and maxPriorityFeePerGas to use network defaults
+      };
+      
+      // Display debug info before sending transaction
+      setDebugInfo(JSON.stringify({
+        directDeposit: {
+          method: "depositERC20",
+          methodId: "0xb79092fd",
+          amount: formData.amount,
+          amountWei: amountInWei.toString(),
+          fromAddress: account,
+          gasSettings: "Using MetaMask suggested gas values"
+        }
+      }, null, 2));
+      
+      // Deposit tokens to the bridge
+      const tx = await bridgeContract.depositERC20(
+        amountInWei,
+        gasSettings
+      );
+      
+      setDebugInfo(prev => 
+        prev + '\n\nDeposit transaction sent! Hash: ' + tx.hash + 
+        '\nWaiting for confirmation...'
+      );
+      
+      // Wait for transaction to be mined
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 0) {
+        throw {
+          message: 'Transaction reverted on-chain',
+          receipt: receipt,
+          code: 'CALL_EXCEPTION'
+        };
+      }
+      
+      setTxHash(tx.hash);
+      setDebugInfo(prev => prev + '\n\nDeposit successful! Receipt: ' + JSON.stringify(receipt, null, 2));
       
       // Update token balance
       if (account && tokenContract) {
@@ -554,26 +649,79 @@ export default function ERC20DepositInterface() {
       </div>
       
       {isConnected && (
-        <div className="bg-slate-700/30 p-4 rounded-lg mb-4">
-          <h3 className="text-sm font-medium mb-2">Deposit Process</h3>
-          <div className="flex items-center mb-4">
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center ${depositStep === 'approve' ? 'bg-blue-600' : 'bg-green-600'}`}>
-              1
-            </div>
-            <div className="h-1 w-8 bg-slate-600 mx-2"></div>
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center ${depositStep === 'deposit' ? 'bg-blue-600' : 'bg-slate-600'}`}>
-              2
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4 bg-slate-700/30 p-3 rounded-lg">
+            <h3 className="text-sm font-medium">Deposit Method</h3>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsTwoStepMode(true)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  isTwoStepMode 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                }`}
+              >
+                Two-Step Process
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTwoStepMode(false)}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  !isTwoStepMode 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                }`}
+              >
+                Direct Deposit
+              </button>
             </div>
           </div>
-          <p className="text-sm text-gray-300">
-            {depositStep === 'approve' 
-              ? 'Step 1: Approve the bridge contract to use your Animecoin tokens' 
-              : 'Step 2: Deposit your approved tokens to the bridge contract'}
-          </p>
+          
+          {isTwoStepMode && (
+            <div className="bg-slate-700/30 p-4 rounded-lg mb-4">
+              <h3 className="text-sm font-medium mb-2">Two-Step Process</h3>
+              <div className="flex items-center mb-4">
+                <div className={`rounded-full h-8 w-8 flex items-center justify-center ${depositStep === 'approve' ? 'bg-blue-600' : 'bg-green-600'}`}>
+                  1
+                </div>
+                <div className="h-1 w-8 bg-slate-600 mx-2"></div>
+                <div className={`rounded-full h-8 w-8 flex items-center justify-center ${depositStep === 'deposit' ? 'bg-blue-600' : 'bg-slate-600'}`}>
+                  2
+                </div>
+              </div>
+              <p className="text-sm text-gray-300">
+                {depositStep === 'approve' 
+                  ? 'Step 1: Approve the bridge contract to use your Animecoin tokens' 
+                  : 'Step 2: Deposit your approved tokens to the bridge contract'}
+              </p>
+            </div>
+          )}
+          
+          {!isTwoStepMode && (
+            <div className="bg-slate-700/30 p-4 rounded-lg mb-4">
+              <div className="flex items-center">
+                <div className="rounded-full h-8 w-8 flex items-center justify-center bg-purple-600 mr-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-white">Direct Deposit (depositERC20)</h4>
+                  <p className="text-xs text-gray-300 mt-1">
+                    Calls depositERC20 directly. Make sure you have already approved ANIME tokens.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 p-2 bg-yellow-900/30 border border-yellow-700/50 rounded text-xs text-yellow-200">
+                <strong>Note:</strong> This method requires that you have already approved the bridge contract to spend your ANIME tokens. If you haven't done so, the transaction will fail.
+              </div>
+            </div>
+          )}
         </div>
       )}
       
-      <form onSubmit={depositStep === 'approve' ? approveTokens : depositTokens} className="space-y-4">
+      <form onSubmit={isTwoStepMode ? (depositStep === 'approve' ? approveTokens : depositTokens) : directDepositTokens} className="space-y-4">
         <div className="grid grid-cols-1 gap-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">
@@ -593,10 +741,19 @@ export default function ERC20DepositInterface() {
           
           <div>
             <h3 className="text-sm font-semibold mb-2">Gas Settings</h3>
+            <div className="bg-slate-700/30 p-3 rounded-md border border-slate-600/50 mb-2">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm text-blue-300">Using MetaMask's suggested gas values for optimal transaction processing</p>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs text-gray-300 mb-1">
-                  Gas Limit
+                  Gas Limit (Fallback)
                 </label>
                 <input
                   type="text"
@@ -607,36 +764,25 @@ export default function ERC20DepositInterface() {
                   placeholder="Gas limit"
                   required
                 />
+                <p className="text-xs text-gray-400 mt-1">Only used as fallback</p>
               </div>
               
               <div>
                 <label className="block text-xs text-gray-300 mb-1">
-                  Max Fee (Gwei)
+                  Max Fee (Network Suggested)
                 </label>
-                <input
-                  type="text"
-                  name="maxFeePerGas"
-                  value={formData.maxFeePerGas}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-                  placeholder="Max fee per gas in Gwei"
-                  required
-                />
+                <div className="w-full p-2 bg-slate-800 rounded-md border border-slate-700 text-sm font-mono text-gray-400 cursor-not-allowed">
+                  Determined by MetaMask
+                </div>
               </div>
               
               <div>
                 <label className="block text-xs text-gray-300 mb-1">
-                  Priority Fee (Gwei)
+                  Priority Fee (Network Suggested)
                 </label>
-                <input
-                  type="text"
-                  name="maxPriorityFeePerGas"
-                  value={formData.maxPriorityFeePerGas}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
-                  placeholder="Max priority fee per gas in Gwei"
-                  required
-                />
+                <div className="w-full p-2 bg-slate-800 rounded-md border border-slate-700 text-sm font-mono text-gray-400 cursor-not-allowed">
+                  Determined by MetaMask
+                </div>
               </div>
             </div>
           </div>
@@ -645,17 +791,21 @@ export default function ERC20DepositInterface() {
         <button
           type="submit"
           className={`w-full px-4 py-3 rounded-md transition-colors ${
-            depositStep === 'approve' 
-              ? 'bg-yellow-600 hover:bg-yellow-700' 
-              : 'bg-purple-600 hover:bg-purple-700'
+            !isTwoStepMode 
+              ? 'bg-indigo-600 hover:bg-indigo-700'
+              : depositStep === 'approve' 
+                ? 'bg-yellow-600 hover:bg-yellow-700' 
+                : 'bg-purple-600 hover:bg-purple-700'
           }`}
           disabled={!isConnected || isLoading || !isArbitrumNetwork}
         >
           {isLoading 
             ? 'Processing...' 
-            : depositStep === 'approve' 
-              ? 'Step 1: Approve Tokens'
-              : 'Step 2: Deposit Tokens'
+            : !isTwoStepMode
+              ? 'Direct Deposit ANIME (depositERC20)'
+              : depositStep === 'approve' 
+                ? 'Step 1: Approve Tokens'
+                : 'Step 2: Deposit Tokens'
           }
         </button>
       </form>
@@ -673,8 +823,21 @@ export default function ERC20DepositInterface() {
         <h3 className="text-sm font-semibold mb-2">About This Deposit</h3>
         <p className="text-sm text-gray-300">
           This interface allows you to deposit Animecoin tokens directly to the bridge contract.
-          The deposit uses the depositERC20 function of the bridge contract.
+          Choose between the two-step process (approve then deposit) or direct deposit if you've already approved tokens.
         </p>
+        <div className="mt-3">
+          <h4 className="text-sm font-medium text-gray-300">Available Methods:</h4>
+          <ul className="mt-2 text-sm text-gray-300 space-y-2">
+            <li className="flex items-start">
+              <span className="font-mono text-xs bg-slate-700 rounded px-1.5 py-0.5 mr-2 inline-block mt-0.5">approve(address,uint256)</span>
+              <span>Approves the bridge contract to spend your ANIME tokens (Step 1)</span>
+            </li>
+            <li className="flex items-start">
+              <span className="font-mono text-xs bg-slate-700 rounded px-1.5 py-0.5 mr-2 inline-block mt-0.5">depositERC20(uint256)</span>
+              <span>Deposits approved ANIME tokens to the bridge (MethodID: 0xb79092fd)</span>
+            </li>
+          </ul>
+        </div>
         <div className="mt-4">
           <h4 className="text-sm font-medium text-gray-300">Addresses:</h4>
           <div className="mt-2 p-2 bg-slate-700/30 rounded-md">
