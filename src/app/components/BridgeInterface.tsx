@@ -76,6 +76,11 @@ const BRIDGE_CONTRACT_ADDRESS = '0xA203252940839c8482dD4b938b4178f842E343D7';
 const DEFAULT_TO_ADDRESS = '0x5f0aBD2b1988640C45efa24d09947290C98172cf';
 const DEFAULT_DATA = ethers.utils.toUtf8Bytes('superbridge');
 
+// Successful transaction parameter values
+const DEFAULT_MAX_SUBMISSION_COST = '10392480000000';
+const DEFAULT_GAS_LIMIT = '300000';
+const DEFAULT_MAX_FEE_PER_GAS = '60000000';
+
 export default function BridgeInterface() {
   // State variables
   const [account, setAccount] = useState<string | null>(null);
@@ -93,12 +98,14 @@ export default function BridgeInterface() {
   const [formData, setFormData] = useState({
     to: DEFAULT_TO_ADDRESS,
     l2CallValue: ethers.utils.parseEther('0.01').toString(), // Default to 0.01 ETH instead of 1 ETH
-    maxSubmissionCost: '10392480000000',
+    maxSubmissionCost: DEFAULT_MAX_SUBMISSION_COST,
     excessFeeRefundAddress: DEFAULT_TO_ADDRESS,
     callValueRefundAddress: DEFAULT_TO_ADDRESS,
-    gasLimit: '5000000', // Increased gas limit to avoid estimation issues
-    maxFeePerGas: '60000000',
-    data: 'superbridge'
+    gasLimit: DEFAULT_GAS_LIMIT,
+    maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS,
+    data: 'superbridge',
+    // Add a new field for transaction-level gas limit
+    txGasLimit: '10000000'
   });
 
   // Calculate the token total fee amount (l2CallValue + maxSubmissionCost)
@@ -275,30 +282,25 @@ export default function BridgeInterface() {
       // Calculate token total fee amount
       const tokenTotalFeeAmount = calculateTokenTotalFeeAmount();
       
-      // Prepare transaction parameters
-      const txParams = {
-        to: formData.to,
-        l2CallValue: formData.l2CallValue,
-        maxSubmissionCost: formData.maxSubmissionCost,
-        excessFeeRefundAddress: formData.excessFeeRefundAddress,
-        callValueRefundAddress: formData.callValueRefundAddress,
-        gasLimit: formData.gasLimit,
-        maxFeePerGas: formData.maxFeePerGas,
-        tokenTotalFeeAmount: tokenTotalFeeAmount,
-        data: dataBytes
-      };
-      
-      // Display debug info
+      // Display debug info before sending transaction
       setDebugInfo(JSON.stringify({
         params: {
-          ...txParams,
-          tokenTotalFeeAmount: ethers.utils.formatEther(tokenTotalFeeAmount) + ' ETH',
-          l2CallValue: ethers.utils.formatEther(formData.l2CallValue) + ' ETH',
-          data: formData.data
+          to: formData.to,
+          l2CallValue: formData.l2CallValue,
+          l2CallValueReadable: ethers.utils.formatEther(formData.l2CallValue) + ' ETH',
+          maxSubmissionCost: formData.maxSubmissionCost,
+          excessFeeRefundAddress: formData.excessFeeRefundAddress,
+          callValueRefundAddress: formData.callValueRefundAddress,
+          gasLimit: formData.gasLimit,
+          maxFeePerGas: formData.maxFeePerGas,
+          tokenTotalFeeAmount: tokenTotalFeeAmount,
+          tokenTotalFeeAmountReadable: ethers.utils.formatEther(tokenTotalFeeAmount) + ' ETH',
+          data: formData.data,
+          txGasLimit: formData.txGasLimit
         }
       }, null, 2));
       
-      // Call the bridge contract with explicit gas limit to avoid estimation errors
+      // Call the bridge contract with explicit gas limit
       const tx = await bridgeContract.createRetryableTicket(
         formData.to,
         formData.l2CallValue,
@@ -311,12 +313,25 @@ export default function BridgeInterface() {
         dataBytes,
         {
           value: tokenTotalFeeAmount, // Send ETH with the transaction
-          gasLimit: ethers.utils.hexlify(10000000) // Explicit gas limit
+          gasLimit: ethers.BigNumber.from(formData.txGasLimit) // Use custom gas limit
         }
+      );
+      
+      setDebugInfo(prev => 
+        prev + '\n\nTransaction sent! Hash: ' + tx.hash + 
+        '\nWaiting for confirmation...'
       );
       
       // Wait for transaction to be mined
       const receipt = await tx.wait();
+      
+      if (receipt.status === 0) {
+        throw {
+          message: 'Transaction reverted on-chain',
+          receipt: receipt,
+          code: 'CALL_EXCEPTION'
+        };
+      }
       
       setTxHash(tx.hash);
       setDebugInfo(prev => prev + '\n\nTransaction success! Receipt: ' + JSON.stringify(receipt, null, 2));
@@ -326,14 +341,23 @@ export default function BridgeInterface() {
       
       // Enhanced error debugging
       if (err.code === 'UNPREDICTABLE_GAS_LIMIT') {
-        errorMessage = 'Transaction simulation failed. This could be due to insufficient funds, incorrect parameters, or contract restrictions.';
+        errorMessage = 'Transaction simulation failed. This could be due to insufficient funds or invalid parameters.';
+      } else if (err.code === 'CALL_EXCEPTION') {
+        errorMessage = 'Transaction failed on-chain. The bridge contract rejected the transaction.';
+        
+        // Provide more specific guidance
+        errorMessage += '\n\nPossible causes:\n' +
+          '- Insufficient balance for fees\n' +
+          '- Invalid parameters for the bridge contract\n' +
+          '- Try using the exact parameters from the example transaction';
       }
       
       setError(errorMessage);
       setDebugInfo(prev => prev + '\n\nTransaction error: ' + JSON.stringify({
         error: err.message,
         code: err.code,
-        details: err.data ? err.data.message : 'No additional details'
+        details: err.data ? err.data.message : 'No additional details',
+        receipt: err.receipt ? JSON.stringify(err.receipt, null, 2) : 'No receipt'
       }, null, 2));
     } finally {
       setIsLoading(false);
@@ -428,6 +452,33 @@ export default function BridgeInterface() {
       </div>
       
       <form onSubmit={handleBridgeTransaction} className="space-y-4">
+        {isConnected && (
+          <div className="bg-slate-700/30 p-4 rounded-lg mb-4">
+            <p className="text-sm text-gray-300 mb-2">
+              Having issues with the bridge? Try using the example transaction values that are known to work:
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFormData({
+                  to: DEFAULT_TO_ADDRESS,
+                  l2CallValue: ethers.utils.parseEther('0.01').toString(),
+                  maxSubmissionCost: DEFAULT_MAX_SUBMISSION_COST,
+                  excessFeeRefundAddress: account || DEFAULT_TO_ADDRESS,
+                  callValueRefundAddress: account || DEFAULT_TO_ADDRESS,
+                  gasLimit: DEFAULT_GAS_LIMIT,
+                  maxFeePerGas: DEFAULT_MAX_FEE_PER_GAS,
+                  data: 'superbridge',
+                  txGasLimit: '10000000'
+                });
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors text-sm"
+            >
+              Use Example Values
+            </button>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">
@@ -565,6 +616,20 @@ export default function BridgeInterface() {
               required
             />
           </div>
+        </div>
+        
+        <div className="bg-slate-700/30 p-4 rounded-lg">
+          <h3 className="text-sm font-semibold mb-2">Transaction Gas Limit</h3>
+          <input
+            type="text"
+            name="txGasLimit"
+            value={formData.txGasLimit}
+            onChange={handleInputChange}
+            className="w-full p-2 bg-slate-700 rounded-md border border-slate-600 text-sm font-mono"
+            placeholder="Gas limit for transaction"
+            required
+          />
+          <p className="text-xs text-gray-400 mt-1">Gas limit for the entire transaction (not L2 gas limit)</p>
         </div>
         
         <div className="bg-slate-700/30 p-4 rounded-lg">
