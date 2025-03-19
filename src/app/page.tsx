@@ -6,6 +6,7 @@ import ConfigViewer from "./components/ConfigViewer";
 import JsonRpcInterface from "./components/JsonRpcInterface";
 import BlockchainStats from "./components/BlockchainStats";
 import BridgeInterface from "./components/BridgeInterface";
+import ERC20DepositInterface from "./components/ERC20DepositInterface";
 import { useState } from "react";
 import { config } from "./config";
 
@@ -21,7 +22,7 @@ function MainContent() {
     websocketUrl 
   } = useWeb3();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats' | 'bridge'>('stats');
+  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats' | 'bridge' | 'token-deposit'>('stats');
 
   // Open contract address in block explorer
   const openContractExplorer = () => {
@@ -116,6 +117,16 @@ function MainContent() {
           </button>
           <button
             className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'token-deposit' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('token-deposit')}
+          >
+            Token Deposit
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
               activeTab === 'config' 
                 ? 'border-blue-500 text-blue-500' 
                 : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
@@ -159,6 +170,11 @@ function MainContent() {
         {/* Bridge Tab */}
         {activeTab === 'bridge' && (
           <BridgeInterface />
+        )}
+
+        {/* Token Deposit Tab */}
+        {activeTab === 'token-deposit' && (
+          <ERC20DepositInterface />
         )}
 
         {/* Configuration Tab */}
