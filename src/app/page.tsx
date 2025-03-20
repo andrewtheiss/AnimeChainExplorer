@@ -22,7 +22,7 @@ function MainContent() {
     websocketUrl 
   } = useWeb3();
 
-  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats' | 'bridge' | 'token-deposit'>('stats');
+  const [activeTab, setActiveTab] = useState<'events' | 'config' | 'jsonrpc' | 'stats' | 'bridge'>('bridge');
 
   // Open contract address in block explorer
   const openContractExplorer = () => {
@@ -77,6 +77,16 @@ function MainContent() {
         <div className="flex flex-wrap -mb-px">
           <button
             className={`py-2 px-4 border-b-2 font-medium text-sm ${
+              activeTab === 'bridge' 
+                ? 'border-blue-500 text-blue-500' 
+                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
+            }`}
+            onClick={() => setActiveTab('bridge')}
+          >
+            Bridge
+          </button>
+          <button
+            className={`py-2 px-4 border-b-2 font-medium text-sm ${
               activeTab === 'events' 
                 ? 'border-blue-500 text-blue-500' 
                 : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
@@ -104,26 +114,6 @@ function MainContent() {
             onClick={() => setActiveTab('stats')}
           >
             Blockchain Stats
-          </button>
-          <button
-            className={`py-2 px-4 border-b-2 font-medium text-sm ${
-              activeTab === 'bridge' 
-                ? 'border-blue-500 text-blue-500' 
-                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
-            }`}
-            onClick={() => setActiveTab('bridge')}
-          >
-            Bridge
-          </button>
-          <button
-            className={`py-2 px-4 border-b-2 font-medium text-sm ${
-              activeTab === 'token-deposit' 
-                ? 'border-blue-500 text-blue-500' 
-                : 'border-transparent hover:border-slate-500 hover:text-slate-400 text-slate-300'
-            }`}
-            onClick={() => setActiveTab('token-deposit')}
-          >
-            Token Deposit
           </button>
           <button
             className={`py-2 px-4 border-b-2 font-medium text-sm ${
@@ -170,11 +160,6 @@ function MainContent() {
         {/* Bridge Tab */}
         {activeTab === 'bridge' && (
           <BridgeInterface />
-        )}
-
-        {/* Token Deposit Tab */}
-        {activeTab === 'token-deposit' && (
-          <ERC20DepositInterface />
         )}
 
         {/* Configuration Tab */}

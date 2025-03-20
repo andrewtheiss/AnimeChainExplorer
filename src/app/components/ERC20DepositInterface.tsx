@@ -32,25 +32,6 @@ const ERC20_ABI = [
     "payable": false,
     "stateMutability": "nonpayable",
     "type": "function"
-  },
-  {
-    "constant": true,
-    "inputs": [
-      {
-        "name": "_owner",
-        "type": "address"
-      }
-    ],
-    "name": "balanceOf",
-    "outputs": [
-      {
-        "name": "balance",
-        "type": "uint256"
-      }
-    ],
-    "payable": false,
-    "stateMutability": "view",
-    "type": "function"
   }
 ];
 
@@ -211,7 +192,7 @@ export default function ERC20DepositInterface() {
         setError(null);
         
         // Fetch token balance
-        await fetchTokenBalance(account, tokenContract);
+        await fetchTokenBalance(account);
       } catch (contractErr: any) {
         console.error('Error initializing contracts:', contractErr);
         setError(`Error initializing contracts. Please ensure you have the correct addresses. Details: ${contractErr.message}`);
@@ -229,18 +210,125 @@ export default function ERC20DepositInterface() {
   };
 
   // Fetch token balance
-  const fetchTokenBalance = async (address: string, contract: ethers.Contract | null) => {
-    if (!contract) return;
+  const fetchTokenBalance = async (address: string) => {
+    if (!provider) {
+      console.error('Provider not available for balance check');
+      setTokenBalance('Error: No provider');
+      return;
+    }
+    
+    if (!address) {
+      console.error('No address provided for balance check');
+      setTokenBalance('Error: No address');
+      return;
+    }
     
     try {
       // Use safe checksum function
-      const checksummedAddress = safeChecksum(address);
-      const balance = await contract.balanceOf(checksummedAddress);
-      setTokenBalance(ethers.utils.formatEther(balance));
+      let checksummedAddress;
+      try {
+        checksummedAddress = safeChecksum(address);
+      } catch (checksumErr: any) {
+        console.error('Error checksumming address:', checksumErr);
+        setTokenBalance('Error: Address format');
+        setDebugInfo(`Error: Invalid address format - ${address}`);
+        return;
+      }
+      
+      // Create the raw call data for balanceOf (0x70a08231)
+      const addressWithoutPrefix = checksummedAddress.substring(2).toLowerCase();
+      // In ABI encoding, we need 24 zeros followed by the 20-byte address (without 0x prefix)
+      const callData = `0x70a08231${'0'.repeat(24)}${addressWithoutPrefix}`;
+      
+      let result;
+      try {
+        // Make a raw call to the token contract
+        result = await provider.call({
+          to: ANIME_TOKEN_ADDRESS,
+          data: callData
+        });
+      } catch (callErr: any) {
+        console.error('Error making raw call to token contract:', callErr);
+        setTokenBalance('Error: RPC call failed');
+        setDebugInfo(JSON.stringify({
+          rawCallError: {
+            message: callErr.message,
+            code: callErr.code,
+            data: callErr.data,
+            callData
+          }
+        }, null, 2));
+        return;
+      }
+      
+      let balance;
+      try {
+        // Parse the result (it's a hex string representing the uint256 value)
+        balance = ethers.BigNumber.from(result);
+        setTokenBalance(ethers.utils.formatEther(balance));
+      } catch (parseErr: any) {
+        console.error('Error parsing balance result:', parseErr);
+        setTokenBalance('Error: Parse failed');
+        setDebugInfo(JSON.stringify({
+          parseError: {
+            message: parseErr.message,
+            result
+          }
+        }, null, 2));
+        return;
+      }
+      
+      // Add debug info
+      setDebugInfo(prev => {
+        // Also check the specific account mentioned by the user
+        const testAccount = "0xae111CBB37f948F244C565dB3b695348C986C982";
+        const testAddressWithoutPrefix = testAccount.substring(2).toLowerCase();
+        const testCallData = `0x70a08231${'0'.repeat(24)}${testAddressWithoutPrefix}`;
+        
+        // Asynchronously fetch the test account balance but don't wait for it
+        provider.call({
+          to: ANIME_TOKEN_ADDRESS,
+          data: testCallData
+        }).then(testResult => {
+          const testBalance = ethers.BigNumber.from(testResult);
+          const formattedTestBalance = ethers.utils.formatEther(testBalance);
+          console.log(`Test account balance: ${formattedTestBalance} ANIME`);
+        }).catch(err => {
+          console.error('Error fetching test account balance:', err);
+        });
+        
+        const newInfo = {
+          balanceOfRawCall: {
+            method: "balanceOf(address)",
+            methodId: "0x70a08231",
+            address: checksummedAddress,
+            description: "Using raw call instead of contract ABI to check balance",
+            rawCallData: callData,
+            dataFormat: "0x70a08231 + 24 zeros + 40-char address (no 0x prefix)",
+            rawResult: result,
+            parsedBalance: ethers.utils.formatEther(balance),
+            testAccount: {
+              address: testAccount,
+              callData: testCallData
+            }
+          }
+        };
+        return prev ? `${prev}\n\nBalance check: ${JSON.stringify(newInfo, null, 2)}` : JSON.stringify(newInfo, null, 2);
+      });
     } catch (err: any) {
       console.error('Error fetching token balance:', err);
       // Don't break the UI if balance check fails
       setTokenBalance('Error');
+      setDebugInfo(prev => {
+        const errorInfo = {
+          balanceOfError: {
+            message: err.message,
+            code: err.code,
+            details: err.data ? err.data.message : 'No additional details'
+          }
+        };
+        return prev ? `${prev}\n\nBalance check error: ${JSON.stringify(errorInfo, null, 2)}` : JSON.stringify(errorInfo, null, 2);
+      });
     }
   };
 
@@ -314,12 +402,45 @@ export default function ERC20DepositInterface() {
         }
       }, null, 2));
       
-      // Approve tokens to be spent by the bridge contract
-      const tx = await tokenContract.approve(
-        checksummedBridgeAddress,
-        amountInWei,
-        gasSettings
-      );
+      let tx;
+      try {
+        // Try to use contract method first
+        // Approve tokens to be spent by the bridge contract
+        tx = await tokenContract.approve(
+          checksummedBridgeAddress,
+          amountInWei,
+          gasSettings
+        );
+      } catch (approveErr: any) {
+        // If contract.approve fails, try a raw transaction as fallback
+        console.warn('Contract approve method failed, trying raw transaction:', approveErr);
+        
+        // Create the raw approve call data (methodId: 0x095ea7b3)
+        // Format: 0x095ea7b3 + address(32 bytes) + amount(32 bytes)
+        const spenderAddressWithoutPrefix = checksummedBridgeAddress.substring(2).toLowerCase();
+        const paddedSpender = '0'.repeat(24) + spenderAddressWithoutPrefix;
+        const paddedAmount = amountInWei.toHexString().substring(2).padStart(64, '0');
+        const approveCallData = `0x095ea7b3${paddedSpender}${paddedAmount}`;
+        
+        setDebugInfo(prev => 
+          prev + '\n\nFalling back to raw approve transaction:\n' + 
+          JSON.stringify({
+            rawApprove: {
+              methodId: "0x095ea7b3",
+              to: ANIME_TOKEN_ADDRESS,
+              data: approveCallData,
+              gasLimit: formData.gasLimit
+            }
+          }, null, 2)
+        );
+        
+        // Send raw transaction
+        tx = await signer.sendTransaction({
+          to: ANIME_TOKEN_ADDRESS,
+          data: approveCallData,
+          gasLimit: ethers.BigNumber.from(formData.gasLimit)
+        });
+      }
       
       setDebugInfo(prev => 
         prev + '\n\nApproval transaction sent! Hash: ' + tx.hash + 
@@ -434,8 +555,8 @@ export default function ERC20DepositInterface() {
       setDepositStep('approve');
       
       // Update token balance
-      if (account && tokenContract) {
-        await fetchTokenBalance(account, tokenContract);
+      if (account) {
+        await fetchTokenBalance(account);
       }
     } catch (err: any) {
       console.error('Error depositing tokens:', err);
@@ -528,8 +649,8 @@ export default function ERC20DepositInterface() {
       setDebugInfo(prev => prev + '\n\nDeposit successful! Receipt: ' + JSON.stringify(receipt, null, 2));
       
       // Update token balance
-      if (account && tokenContract) {
-        await fetchTokenBalance(account, tokenContract);
+      if (account) {
+        await fetchTokenBalance(account);
       }
     } catch (err: any) {
       console.error('Error depositing tokens:', err);
@@ -568,8 +689,8 @@ export default function ERC20DepositInterface() {
           setAccount(accounts[0]);
           
           // Fetch new token balance
-          if (tokenContract) {
-            fetchTokenBalance(accounts[0], tokenContract);
+          if (provider) {
+            fetchTokenBalance(accounts[0]);
           }
         }
       };
@@ -588,7 +709,7 @@ export default function ERC20DepositInterface() {
         ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
-  }, [account, tokenContract]);
+  }, [account, provider]);
 
   return (
     <div className="p-6 bg-slate-800 rounded-lg">
@@ -835,6 +956,10 @@ export default function ERC20DepositInterface() {
             <li className="flex items-start">
               <span className="font-mono text-xs bg-slate-700 rounded px-1.5 py-0.5 mr-2 inline-block mt-0.5">depositERC20(uint256)</span>
               <span>Deposits approved ANIME tokens to the bridge (MethodID: 0xb79092fd)</span>
+            </li>
+            <li className="flex items-start">
+              <span className="font-mono text-xs bg-slate-700 rounded px-1.5 py-0.5 mr-2 inline-block mt-0.5">balanceOf(address)</span>
+              <span>Raw call to check ANIME balance (MethodID: 0x70a08231)</span>
             </li>
           </ul>
         </div>
