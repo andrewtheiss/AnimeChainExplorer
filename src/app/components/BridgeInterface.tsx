@@ -273,6 +273,9 @@ export default function BridgeInterface() {
 
         setIsConnected(true);
         
+        // Update form addresses with connected wallet address
+        updateFormAddresses(account);
+        
         // Check approval status
         checkApprovalStatus(account, tokenContract);
         
@@ -466,6 +469,25 @@ export default function BridgeInterface() {
   // Handle form input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    // Add validation for ANIME amount
+    if (name === 'displayL2CallValue') {
+      // Validate that the input is a valid number
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        // Don't allow values over 100 ANIME
+        if (numValue > 100) {
+          setError('Amount cannot exceed 100 ANIME tokens');
+          return;
+        } else {
+          // Clear error if it was previously set
+          if (error === 'Amount cannot exceed 100 ANIME tokens') {
+            setError(null);
+          }
+        }
+      }
+    }
+    
     setFormData({
       ...formData,
       [name]: value
@@ -483,6 +505,18 @@ export default function BridgeInterface() {
 
     if (approvalStatus !== 'approved') {
       setError('Please approve token spending first');
+      return;
+    }
+    
+    // Add validation to prevent amounts over 100 ANIME
+    const amount = parseFloat(formData.displayL2CallValue);
+    if (isNaN(amount)) {
+      setError('Please enter a valid amount');
+      return;
+    }
+    
+    if (amount > 100) {
+      setError('Amount cannot exceed 100 ANIME tokens');
       return;
     }
 
@@ -550,15 +584,8 @@ export default function BridgeInterface() {
 
       // Proceed with the transaction...
       // Create calldata
-      const calldata = ethers.utils.defaultAbiCoder.encode(
-        ['uint256', 'bytes32', 'address'],
-        [
-          ethers.utils.parseEther(formData.displayL2CallValue),
-          ethers.utils.formatBytes32String(formData.data || ""),
-          formData.to
-        ]
-      );
-
+      const calldata = "0x"; // Empty bytes for calldata
+      
       // Set gas parameters
       const gasParams = {};
 
@@ -841,6 +868,34 @@ export default function BridgeInterface() {
         </div>
       </div>
 
+      {/* Warning banner about transactions not going through */}
+      <div className="mb-6 p-4 bg-red-900/50 border-2 border-red-500 rounded-lg text-center">
+        <div className="flex flex-col items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <h3 className="text-xl font-bold text-red-300 mb-2">IMPORTANT NOTICE</h3>
+          <p className="text-white font-medium mb-2">Bridge transactions are currently NOT GOING THROUGH</p>
+          <p className="text-yellow-300 text-sm mb-3">⚙️ Developers are actively working on finding another working bridge contract ⚙️</p>
+          <div className="bg-black/30 p-3 rounded-lg max-w-2xl mt-1">
+            <p className="text-red-200 mb-2">
+              For development purposes, please use the <span className="font-bold">FREE FAUCET</span> instead:
+            </p>
+            <a 
+              href="https://animechain.dev" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="inline-block bg-green-700 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors"
+            >
+              Visit animechain.dev Faucet
+            </a>
+            <p className="text-gray-300 text-sm mt-2">
+              Only 0.1 ANIME is needed for development - save your tokens!
+            </p>
+          </div>
+        </div>
+      </div>
+
       <h2 className="text-xl font-semibold mb-4">Arbitrum Bridge Interface</h2>
       
       <div className="mb-6">
@@ -901,7 +956,7 @@ export default function BridgeInterface() {
                 View transaction on Arbiscan: {txHash}
               </a>
               <a
-                href={`${ANIMECHAIN_EXPLORER_URL}/address/${formData.to}`}
+                href={`${ANIMECHAIN_EXPLORER_URL}/address/${account}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 hover:text-blue-300 underline block"
@@ -948,6 +1003,10 @@ export default function BridgeInterface() {
                     <p className="text-gray-400">
                       Enter the amount of ANIME tokens you wish to bridge to AnimeChain.
                     </p>
+                    <div className="mt-2 p-2 bg-blue-900/20 border border-blue-800/30 rounded text-blue-200 text-xs">
+                      <p className="font-medium">💡 Recommendation: Send no more than 5 ANIME per transaction for better performance.</p>
+                      <p className="mt-1">Maximum allowed: 100 ANIME tokens per transaction.</p>
+                    </div>
                     {isConnected && (
                       <div className="mt-2 p-2 rounded">
                         <div className="flex justify-between items-center">
@@ -1094,28 +1153,100 @@ export default function BridgeInterface() {
         {isConnected && (
           <>
             {/* Advanced settings */}
+            {account && (
+              <div className="p-3 bg-blue-900/30 border border-blue-800 rounded text-sm text-blue-200 mb-4">
+                <p>👉 Your connected wallet address (<span className="font-mono">{`${account.substring(0, 6)}...${account.substring(account.length - 4)}`}</span>) has been set as the destination and refund addresses.</p>
+                {!advancedMode && (
+                  <p className="mt-1 text-xs">Enable Advanced Mode to customize these addresses if needed.</p>
+                )}
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-gray-300 mb-1">
                   Destination Address (to)
                 </label>
-                <input
-                  type="text"
-                  name="to"
-                  value={formData.to}
-                  onChange={handleInputChange}
-                  className={`w-full p-2 rounded-md border text-sm font-mono ${
-                    advancedMode 
-                      ? 'bg-slate-700 border-slate-600' 
-                      : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
-                  }`}
-                  placeholder="0x..."
-                  required
-                  disabled={!advancedMode}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="to"
+                    value={formData.to}
+                    onChange={handleInputChange}
+                    className={`w-full p-2 rounded-md border text-sm font-mono ${
+                      advancedMode 
+                        ? 'bg-slate-700 border-slate-600' 
+                        : 'bg-slate-800 border-slate-700 text-gray-500'
+                    }`}
+                    placeholder="0x..."
+                    required
+                    disabled={!advancedMode}
+                  />
+                  {isConnected && formData.to === account && (
+                    <div className="absolute right-2 top-2 px-2 py-0.5 bg-blue-900/50 border border-blue-700 rounded-sm text-xs text-blue-200">
+                      Your wallet
+                    </div>
+                  )}
+                </div>
                 {isConnected && (
-                  <p className="text-xs text-gray-400 mt-1">Using your connected wallet address</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {formData.to === account 
+                      ? "Using your connected wallet address" 
+                      : "Warning: Not using your connected wallet address"}
+                  </p>
                 )}
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Excess Fee Refund Address
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="excessFeeRefundAddress"
+                    value={formData.excessFeeRefundAddress}
+                    onChange={handleInputChange}
+                    className={`w-full p-2 rounded-md border text-sm font-mono ${
+                      advancedMode 
+                        ? 'bg-slate-700 border-slate-600' 
+                        : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                    placeholder="0x..."
+                    required
+                    disabled={!advancedMode}
+                  />
+                  {isConnected && formData.excessFeeRefundAddress === account && (
+                    <div className="absolute right-2 top-2 px-2 py-0.5 bg-blue-900/50 border border-blue-700 rounded-sm text-xs text-blue-200">
+                      Your wallet
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Call Value Refund Address
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="callValueRefundAddress"
+                    value={formData.callValueRefundAddress}
+                    onChange={handleInputChange}
+                    className={`w-full p-2 rounded-md border text-sm font-mono ${
+                      advancedMode 
+                        ? 'bg-slate-700 border-slate-600' 
+                        : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                    placeholder="0x..."
+                    required
+                    disabled={!advancedMode}
+                  />
+                  {isConnected && formData.callValueRefundAddress === account && (
+                    <div className="absolute right-2 top-2 px-2 py-0.5 bg-blue-900/50 border border-blue-700 rounded-sm text-xs text-blue-200">
+                      Your wallet
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -1145,48 +1276,6 @@ export default function BridgeInterface() {
                         : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
                     }`}
                     placeholder="Cost in wei"
-                    required
-                    disabled={!advancedMode}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">
-                    Excess Fee Refund Address
-                  </label>
-                  <input
-                    type="text"
-                    name="excessFeeRefundAddress"
-                    value={formData.excessFeeRefundAddress}
-                    onChange={handleInputChange}
-                    className={`w-full p-2 rounded-md border text-sm font-mono ${
-                      advancedMode 
-                        ? 'bg-slate-700 border-slate-600' 
-                        : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
-                    }`}
-                    placeholder="0x..."
-                    required
-                    disabled={!advancedMode}
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-sm text-gray-300 mb-1">
-                    Call Value Refund Address
-                  </label>
-                  <input
-                    type="text"
-                    name="callValueRefundAddress"
-                    value={formData.callValueRefundAddress}
-                    onChange={handleInputChange}
-                    className={`w-full p-2 rounded-md border text-sm font-mono ${
-                      advancedMode 
-                        ? 'bg-slate-700 border-slate-600' 
-                        : 'bg-slate-800 border-slate-700 text-gray-500 cursor-not-allowed'
-                    }`}
-                    placeholder="0x..."
                     required
                     disabled={!advancedMode}
                   />
