@@ -310,14 +310,14 @@ export default function BridgeInterface() {
         setApprovalStatus('not-approved');
       }
       
-      setDebugInfo(prev => {
-        const info = prev || '';
-        return info + '\n\nToken allowance check:' + 
-          '\nCurrent allowance: ' + ethers.utils.formatEther(allowance) + ' ANIME' +
-          '\nRequired for bridge: ' + formData.displayL2CallValue + ' ANIME' +
-          '\nRequired approval (including fees): ' + ethers.utils.formatEther(totalRequiredAmount) + ' ANIME' +
-          '\nStatus: ' + (allowance.gte(totalRequiredAmount) ? 'Sufficient allowance' : 'Insufficient allowance - approval needed');
-      });
+      setDebugInfo(JSON.stringify({
+        allowanceCheck: {
+          currentAllowance: ethers.utils.formatEther(allowance) + " ANIME",
+          requiredForBridge: formData.displayL2CallValue + " ANIME",
+          requiredWithFees: ethers.utils.formatEther(totalRequiredAmount) + " ANIME",
+          status: allowance.gte(totalRequiredAmount) ? 'Sufficient allowance' : 'Insufficient allowance - approval needed'
+        }
+      }, null, 2));
     } catch (err: any) {
       console.error('Error checking approval status:', err);
       setApprovalStatus('not-approved');
@@ -376,10 +376,17 @@ export default function BridgeInterface() {
       );
       
       setApprovalTxHash(tx.hash);
-      setDebugInfo(prev => 
-        prev + '\n\nApproval transaction sent! Hash: ' + tx.hash + 
-        '\nWaiting for confirmation...'
-      );
+      setDebugInfo(JSON.stringify({
+        approve: {
+          status: "sent",
+          txHash: tx.hash,
+          spender: checksummedBridgeAddress,
+          amount: formData.displayL2CallValue, 
+          displayApprovalAmount: ethers.utils.formatEther(totalRequiredAmount) + ' ANIME',
+          amountWei: totalRequiredAmount.toString(),
+          message: "Approval transaction sent! Waiting for confirmation..."
+        }
+      }, null, 2));
       
       // Wait for transaction to be mined
       const receipt = await tx.wait();
@@ -393,7 +400,17 @@ export default function BridgeInterface() {
       }
       
       setApprovalStatus('approved');
-      setDebugInfo(prev => prev + '\n\nApproval successful! Receipt: ' + JSON.stringify(receipt, null, 2));
+      setDebugInfo(JSON.stringify({
+        approve: {
+          status: "success",
+          txHash: tx.hash,
+          spender: checksummedBridgeAddress,
+          amount: formData.displayL2CallValue,
+          displayApprovalAmount: ethers.utils.formatEther(totalRequiredAmount) + ' ANIME',
+          amountWei: totalRequiredAmount.toString(),
+          message: "Approval successful!"
+        }
+      }, null, 2));
       
     } catch (err: any) {
       console.error('Error approving token:', err);
@@ -408,10 +425,12 @@ export default function BridgeInterface() {
       }
       
       setError(errorMessage);
-      setDebugInfo(prev => prev + '\n\nApproval error: ' + JSON.stringify({
-        error: err.message,
-        code: err.code,
-        details: err.data ? err.data.message : 'No additional details'
+      setDebugInfo(JSON.stringify({
+        approveError: {
+          error: err.message,
+          code: err.code,
+          details: err.data ? err.data.message : 'No additional details'
+        }
       }, null, 2));
       
       setApprovalStatus('not-approved');
@@ -565,6 +584,7 @@ export default function BridgeInterface() {
       fetchTokenBalance(account);
       checkApprovalStatus(account, tokenContract);
       
+      // Set transaction success debug info
       setDebugInfo(JSON.stringify({
         bridgeTransaction: {
           status: "success",
@@ -693,50 +713,32 @@ export default function BridgeInterface() {
       // Update debug info with balance status
       if (balanceInEther < amountInEther) {
         setDebugInfo(prev => {
-          const currentDebug = prev ? JSON.parse(prev) : {};
+          // Create a new balance check object
+          const balanceCheckInfo = {
+            sufficient: false,
+            balance: balanceInEther.toFixed(4) + " ANIME",
+            required: amountInEther.toFixed(4) + " ANIME",
+            note: "Warning: Insufficient ANIME tokens for this bridge transaction"
+          };
+          
+          // Instead of trying to parse previous debug info, simply create a new one
           return JSON.stringify({
-            ...currentDebug,
-            balanceCheck: {
-              sufficient: false,
-              balance: balanceInEther.toFixed(4) + " ANIME",
-              required: amountInEther.toFixed(4) + " ANIME",
-              note: "Warning: Insufficient ANIME tokens for this bridge transaction"
-            }
+            balanceCheck: balanceCheckInfo
           }, null, 2);
         });
       } else {
-        // Clear any existing balance warning but keep other debug info
+        // Create a new balance check info without trying to parse previous debug
         setDebugInfo(prev => {
-          if (!prev) return null;
-          try {
-            const currentDebug = JSON.parse(prev);
-            if (currentDebug.balanceCheck) {
-              const { balanceCheck, ...rest } = currentDebug;
-              if (Object.keys(rest).length > 0) {
-                return JSON.stringify({
-                  ...rest,
-                  balanceCheck: {
-                    sufficient: true,
-                    balance: balanceInEther.toFixed(4) + " ANIME",
-                    required: amountInEther.toFixed(4) + " ANIME",
-                    note: "Balance is sufficient for this transaction"
-                  }
-                }, null, 2);
-              }
-              return JSON.stringify({
-                balanceCheck: {
-                  sufficient: true,
-                  balance: balanceInEther.toFixed(4) + " ANIME",
-                  required: amountInEther.toFixed(4) + " ANIME",
-                  note: "Balance is sufficient for this transaction"
-                }
-              }, null, 2);
-            }
-            return prev;
-          } catch (err) {
-            console.error('Error parsing debug info:', err);
-            return prev;
-          }
+          const balanceCheckInfo = {
+            sufficient: true,
+            balance: balanceInEther.toFixed(4) + " ANIME",
+            required: amountInEther.toFixed(4) + " ANIME",
+            note: "Balance is sufficient for this transaction"
+          };
+          
+          return JSON.stringify({
+            balanceCheck: balanceCheckInfo
+          }, null, 2);
         });
       }
       
@@ -744,16 +746,12 @@ export default function BridgeInterface() {
     } catch (err) {
       console.error('Error fetching token balance:', err);
       setTokenBalance('0');
-      setDebugInfo(prev => {
-        const currentDebug = prev ? JSON.parse(prev) : {};
-        return JSON.stringify({
-          ...currentDebug,
-          balanceCheck: {
-            error: true,
-            message: "Failed to fetch token balance. Please check your connection."
-          }
-        }, null, 2);
-      });
+      setDebugInfo(JSON.stringify({
+        balanceCheck: {
+          error: true,
+          message: "Failed to fetch token balance. Please check your connection."
+        }
+      }, null, 2));
     } finally {
       setIsLoading(false);
     }
