@@ -1,43 +1,79 @@
-# AnimeChain Explorer
+# AnimeChain Bridge
 
-A modern, responsive blockchain explorer for AnimeChain, built with Next.js, TypeScript, and Tailwind CSS.
+A web application for bridging ANIME tokens from Arbitrum to AnimeChain L3, built with Next.js, TypeScript, and Tailwind CSS.
 
-## Features
+## Overview
 
-- Real-time blockchain statistics from the AnimeChain mainnet
-- WebSocket connection to monitor live contract events
-- Interactive JSON-RPC interface for direct blockchain interaction
-- Configurable settings and environment variables
+AnimeChain Bridge allows users to transfer their ANIME tokens from Arbitrum (L2) to AnimeChain (L3). The bridge operates as a one-way transfer mechanism, enabling seamless asset movement across these networks.
+
+## Key Features
+
+- One-way bridge from Arbitrum to AnimeChain
+- MetaMask integration for secure wallet connection
+- Raw contract calls for optimal gas efficiency
+- Real-time balance checks and transaction monitoring
+- Comprehensive transaction debugging information
 - Responsive design that works on desktop and mobile
-- Standalone proxy server for handling API requests
 
-## Installation
+## Bridge Contract Details
+
+- **Bridge Contract Address (Arbitrum)**: `0xA203252940839c8482dD4b938b4178f842E343D7`
+- **ANIME Token Address (Arbitrum)**: `0x37a645648dF29205C6261289983FB04ECD70b4B3`
+- **ANIME Token Address (Ethereum L1)**: `0x4DC26fC5854e7648a064a4ABD590bBE71724C277`
+
+## How the Bridge Works
+
+1. **Connect Wallet**: Users connect their MetaMask wallet to Arbitrum network
+2. **Token Approval**: Users approve the bridge contract to spend their ANIME tokens
+3. **Bridge Transaction**: The `createRetryableTicket` function is called on the bridge contract
+4. **Token Transfer**: Tokens are locked on Arbitrum and minted on AnimeChain
+5. **Transaction Verification**: Users can view their tokens on AnimeChain Explorer
+
+## Technical Implementation
+
+The bridge uses Arbitrum's `createRetryableTicket` function to send messages between layers. The implementation includes:
+
+- Direct raw contract calls with method IDs for optimal gas usage
+- Two-step process (approve + bridge) with option for direct deposit
+- Error handling with detailed debugging information
+- MetaMask event handling for account changes
+- Automatic gas estimation with manual override options
+
+## Usage Instructions
 
 ### Prerequisites
 
-- Node.js (v18 or later)
-- npm or yarn
+- MetaMask wallet with ANIME tokens on Arbitrum
+- ETH for gas fees on Arbitrum
+
+### Bridging Process
+
+1. Connect your MetaMask wallet to the Arbitrum network
+2. Enter the amount of ANIME tokens you want to bridge
+3. Click "Step 1: Approve Tokens" to approve the bridge contract
+4. Once approved, click "Step 2: Bridge Tokens" to initiate the transfer
+5. Confirm the transaction in MetaMask
+6. Wait for confirmation (typically takes a few minutes)
+7. View your tokens on AnimeChain Explorer
+
+## Installation
 
 ### Local Development Setup
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/AnimeChainExplorer.git
-   cd AnimeChainExplorer
+   git clone https://github.com/yourusername/AnimeChainBridge.git
+   cd AnimeChainBridge
    ```
 
 2. Install dependencies:
    ```bash
    npm install
-   # or
-   yarn install
    ```
 
 3. Start the development server:
    ```bash
    npm run dev
-   # or
-   yarn dev
    ```
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
@@ -49,36 +85,7 @@ To build the application for production:
 ```bash
 npm run build
 npm start
-# or
-yarn build
-yarn start
 ```
-
-## Important Next.js Configuration Notes
-
-This application uses dynamic API routes for proxying requests to the AnimeChain Explorer API. The Next.js configuration in `next.config.js` is set up for server-side rendering (SSR) mode rather than static export mode.
-
-If you want to use static export (`next export`), you'll need to:
-
-1. Update `next.config.js` to include:
-   ```js
-   output: 'export',
-   images: {
-     unoptimized: true,
-   },
-   ```
-
-2. Remove the API routes and implement an alternative CORS solution, such as:
-   - Using a CORS proxy service
-   - Setting up a separate microservice to handle the API requests
-   - Configuring the explorer backend to allow CORS from your origin
-
-### Default Build Mode
-
-The default build mode supports:
-- Dynamic API routes for proxying requests
-- Server-side rendering
-- Client-side data fetching
 
 ## Environment Variables
 
@@ -89,175 +96,49 @@ NEXT_PUBLIC_ANIME_MAINNET_RPC_URL=https://rpc-animechain-39xf6m45e3.t.conduit.xy
 NEXT_PUBLIC_ANIME_MAINNET_WS_URL=wss://rpc-animechain-39xf6m45e3.t.conduit.xyz
 ```
 
-## API Proxy for CORS Issues
+## Bridge Logic Details
 
-The application uses a dedicated proxy server located at `proxy.animechainexplorer.com` to handle CORS issues when fetching data from the AnimeChain Explorer API. 
+The bridge consists of two main components:
 
-### Frontend Configuration
+1. **Token Approval**: 
+   - Uses ERC20 `approve` method (ID: `0x095ea7b3`)
+   - Fallback to raw transaction if contract interface fails
+   - Approves enough tokens for the bridge amount plus fees
 
-The frontend is configured to use the proxy server automatically via the `NEXT_PUBLIC_PROXY_URL` environment variable. If this variable is not set, it defaults to `https://proxy.animechainexplorer.com`.
+2. **Token Bridge**:
+   - Uses `createRetryableTicket` method for cross-chain messaging
+   - Parameters include destination address, token amount, gas parameters, and calldata
+   - Calculates proper fees to ensure successful message delivery
 
-### Available API Endpoints on the Proxy Server
+## Advanced Features
 
-- `/api/blockchain/stats` - Fetches general blockchain statistics
-- `/api/blockchain/transactions` - Fetches transaction data (supports query parameters)
-- `/api/blockchain/blocks` - Fetches block data (supports query parameters)
-- `/api/blockchain/proxy?endpoint=<endpoint>` - General proxy for any explorer endpoint
-- `/health` - Health check endpoint
+The application includes several advanced features accessible through the "Show Advanced Options" toggle:
 
-## Standalone Proxy Server Setup
+- Contract Events monitoring for debugging
+- JSON-RPC interface for direct blockchain interaction
+- Blockchain statistics viewer
+- Configuration settings
 
-The project includes a standalone proxy server in the `proxy` directory. This server can be deployed separately from the main application to handle API requests and avoid CORS issues.
+## Troubleshooting
 
-### Setup Instructions for Proxy Server
+If you encounter issues with the bridge:
 
-1. Navigate to the proxy server directory:
-   ```bash
-   cd proxy
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Configure the environment variables by creating a `.env` file based on the provided `.env.example`:
-   ```bash
-   cp .env.example .env
-   # Edit the .env file with your specific configuration
-   ```
-
-4. Start the proxy server:
-   ```bash
-   # For development with auto-reloading
-   npm run dev
-   
-   # For production
-   npm start
-   ```
-
-### Configuring a Domain for the Proxy Server
-
-To set up the proxy server at `proxy.animechainexplorer.com`:
-
-1. Deploy the proxy server to your hosting provider (e.g., DigitalOcean, AWS, Heroku, etc.)
-
-2. Configure DNS settings for the subdomain `proxy.animechainexplorer.com` to point to your deployed server.
-
-3. Set up a reverse proxy (such as Nginx or Apache) with SSL certificates.
-
-### Example Nginx Configuration for the Proxy Server
-
-```nginx
-server {
-    listen 80;
-    server_name proxy.animechainexplorer.com;
-    
-    # Redirect HTTP to HTTPS
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name proxy.animechainexplorer.com;
-    
-    # SSL configuration
-    ssl_certificate /path/to/fullchain.pem;
-    ssl_certificate_key /path/to/privkey.pem;
-    
-    # Proxy settings
-    location / {
-        proxy_pass http://127.0.0.1:3001;  # Assuming your proxy server runs on port 3001
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-### Using PM2 for Production Deployment
-
-It's recommended to use PM2 for running the proxy server in production:
-
-1. Install PM2 globally:
-   ```bash
-   npm install -g pm2
-   ```
-
-2. Start the proxy server with PM2:
-   ```bash
-   pm2 start server.js --name "animechain-proxy"
-   ```
-
-3. Configure PM2 to start on system boot:
-   ```bash
-   pm2 startup
-   pm2 save
-   ```
-
-### Troubleshooting Proxy Issues
-
-If you encounter issues with the proxy server:
-
-1. **Check Logs** - Check the server logs for error messages:
-   ```bash
-   # If running with PM2
-   pm2 logs animechain-proxy
-   
-   # If running directly
-   npm start
-   ```
-
-2. **Verify CORS Configuration** - Make sure the `ALLOWED_ORIGINS` environment variable includes your frontend domain.
-
-3. **Test Connectivity** - Use a tool like `curl` to test API endpoints:
-   ```bash
-   curl https://proxy.animechainexplorer.com/health
-   ```
-
-4. **Check Firewall Settings** - Ensure your server's firewall allows traffic on the configured port.
-
-5. **Verify Nginx Configuration** - If using Nginx, check the configuration and logs:
-   ```bash
-   nginx -t                           # Test configuration
-   sudo systemctl restart nginx       # Restart Nginx
-   sudo journalctl -u nginx           # Check Nginx logs
-   ```
+1. **Check Token Balance**: Ensure you have sufficient ANIME tokens on Arbitrum
+2. **Check ETH Balance**: You need ETH for gas fees on Arbitrum
+3. **Network Issues**: Make sure you're connected to Arbitrum mainnet
+4. **Gas Settings**: Try increasing gas limit if transactions fail
+5. **Debug Info**: Use the debug information panel for detailed error messages
 
 ## Contributing
 
-Contributions are welcome and appreciated! Here's how to contribute:
+Contributions are welcome! Here's how to contribute:
 
 1. Fork the repository
-2. Create a new branch:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+2. Create a new branch: `git checkout -b feature/your-feature-name`
 3. Make your changes
-4. Commit your changes:
-   ```bash
-   git commit -m "Add some feature"
-   ```
-5. Push to the branch:
-   ```bash
-   git push origin feature/your-feature-name
-   ```
+4. Commit your changes: `git commit -m "Add some feature"`
+5. Push to the branch: `git push origin feature/your-feature-name`
 6. Submit a pull request
-
-### Pull Request Guidelines
-
-- All pull requests should be submitted to the main repository's `main` branch
-- Provide a clear description of the changes made
-- Ensure your code follows the project's style guidelines
-- Make sure all tests pass
-- Update documentation as needed
 
 ## License
 
