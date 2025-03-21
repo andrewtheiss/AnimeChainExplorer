@@ -475,13 +475,13 @@ export default function BridgeInterface() {
       // Validate that the input is a valid number
       const numValue = parseFloat(value);
       if (!isNaN(numValue)) {
-        // Don't allow values over 100 ANIME
-        if (numValue > 100) {
-          setError('Amount cannot exceed 100 ANIME tokens');
+        // Don't allow values over 5 ANIME
+        if (numValue > 5) {
+          setError('Amount cannot exceed 5 ANIME tokens');
           return;
         } else {
           // Clear error if it was previously set
-          if (error === 'Amount cannot exceed 100 ANIME tokens') {
+          if (error === 'Amount cannot exceed 5 ANIME tokens') {
             setError(null);
           }
         }
@@ -508,15 +508,15 @@ export default function BridgeInterface() {
       return;
     }
     
-    // Add validation to prevent amounts over 100 ANIME
+    // Add validation to prevent amounts over 5 ANIME
     const amount = parseFloat(formData.displayL2CallValue);
     if (isNaN(amount)) {
       setError('Please enter a valid amount');
       return;
     }
     
-    if (amount > 100) {
-      setError('Amount cannot exceed 100 ANIME tokens');
+    if (amount > 5) {
+      setError('Amount cannot exceed 5 ANIME tokens');
       return;
     }
 
@@ -868,18 +868,17 @@ export default function BridgeInterface() {
         </div>
       </div>
 
-      {/* Warning banner about transactions not going through */}
-      <div className="mb-6 p-4 bg-red-900/50 border-2 border-red-500 rounded-lg text-center">
+      {/* Warning banner directing to animechain.dev first */}
+      <div className="mb-6 p-4 bg-blue-900/50 border-2 border-blue-500 rounded-lg text-center">
         <div className="flex flex-col items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3 className="text-xl font-bold text-red-300 mb-2">IMPORTANT NOTICE</h3>
-          <p className="text-white font-medium mb-2">Bridge transactions are currently NOT GOING THROUGH</p>
-          <p className="text-yellow-300 text-sm mb-3">⚙️ Developers are actively working on finding another working bridge contract ⚙️</p>
+          <h3 className="text-xl font-bold text-blue-300 mb-2">PLEASE ONLY BRIDGE 5 ANIME OR LESS</h3>
+          <p className="text-white font-medium mb-2">L3 Transactions take up to 20 minutes to confirm.  Be patient!</p>
           <div className="bg-black/30 p-3 rounded-lg max-w-2xl mt-1">
-            <p className="text-red-200 mb-2">
-              For development purposes, please use the <span className="font-bold">FREE FAUCET</span> instead:
+            <p className="text-blue-200 mb-2">
+              For quick development, you can use the <span className="font-bold">FREE FAUCET</span> first:
             </p>
             <a 
               href="https://animechain.dev" 
@@ -1004,8 +1003,8 @@ export default function BridgeInterface() {
                       Enter the amount of ANIME tokens you wish to bridge to AnimeChain.
                     </p>
                     <div className="mt-2 p-2 bg-blue-900/20 border border-blue-800/30 rounded text-blue-200 text-xs">
-                      <p className="font-medium">💡 Recommendation: Send no more than 5 ANIME per transaction for better performance.</p>
-                      <p className="mt-1">Maximum allowed: 100 ANIME tokens per transaction.</p>
+                      <p className="font-medium">💡 Recommendation: Use smaller transactions for better performance.</p>
+                      <p className="mt-1">Maximum allowed: 5 ANIME tokens per transaction.</p>
                     </div>
                     {isConnected && (
                       <div className="mt-2 p-2 rounded">
