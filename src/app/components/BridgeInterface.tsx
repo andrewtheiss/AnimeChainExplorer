@@ -475,13 +475,13 @@ export default function BridgeInterface() {
       // Validate that the input is a valid number
       const numValue = parseFloat(value);
       if (!isNaN(numValue)) {
-        // Don't allow values over 5 ANIME
-        if (numValue > 5) {
-          setError('Amount cannot exceed 5 ANIME tokens');
+        // Don't allow values over 50 ANIME
+        if (numValue > 50) {
+          setError('Amount cannot exceed 50 ANIME tokens');
           return;
         } else {
           // Clear error if it was previously set
-          if (error === 'Amount cannot exceed 5 ANIME tokens') {
+          if (error === 'Amount cannot exceed 50 ANIME tokens' || error === 'Amount cannot exceed 5 ANIME tokens') {
             setError(null);
           }
         }
@@ -508,15 +508,15 @@ export default function BridgeInterface() {
       return;
     }
     
-    // Add validation to prevent amounts over 5 ANIME
+    // Add validation to prevent amounts over 50 ANIME
     const amount = parseFloat(formData.displayL2CallValue);
     if (isNaN(amount)) {
       setError('Please enter a valid amount');
       return;
     }
     
-    if (amount > 5) {
-      setError('Amount cannot exceed 5 ANIME tokens');
+    if (amount > 50) {
+      setError('Amount cannot exceed 50 ANIME tokens');
       return;
     }
 
@@ -1004,7 +1004,7 @@ export default function BridgeInterface() {
                     </p>
                     <div className="mt-2 p-2 bg-blue-900/20 border border-blue-800/30 rounded text-blue-200 text-xs">
                       <p className="font-medium">💡 Recommendation: Use smaller transactions for better performance.</p>
-                      <p className="mt-1">Maximum allowed: 5 ANIME tokens per transaction.</p>
+                      <p className="mt-1">Maximum allowed: 50 ANIME tokens per transaction.</p>
                     </div>
                     {isConnected && (
                       <div className="mt-2 p-2 rounded">

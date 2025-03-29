@@ -20,12 +20,12 @@ export default function MintProgressPage() {
             <p className="text-gray-300 mb-4">Live tracking of the TCG Booster Box NFT minting</p>
           </div>
           
-          <Link 
+          <a 
             href="/"
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors text-sm"
           >
             Back to Home
-          </Link>
+          </a>
         </div>
       </header>
 
@@ -160,9 +160,9 @@ export default function MintProgressPage() {
       <footer className="mt-12 pt-6 border-t border-slate-700 text-center text-sm text-gray-400">
         <p>AnimeChain NFT Mint Progress • Official Status Page</p>
         <p className="mt-2">
-          <Link href="/" className="text-blue-400 hover:text-blue-300">
+          <a href="/" className="text-blue-400 hover:text-blue-300">
             Return to Main Bridge Page
-          </Link>
+          </a>
         </p>
       </footer>
       
