@@ -20,4 +20,8 @@ For development, you can use placeholder files, but make sure to replace them wi
 ## Format Requirements
 
 - Image: PNG format, recommended size: 350x350 px
-- Video: WebM format, recommended size: 512x512 px, duration: 3-5 seconds, looping animation 
+- Video: WebM format, recommended size: 512x512 px, duration: 3-5 seconds, looping animation
+
+## Token Information
+
+The TCG Booster Box is an ERC-1155 token deployed on AnimeChain at address 0x0CA9229a48a154C62F8398e52a8fE082E9587D19. 

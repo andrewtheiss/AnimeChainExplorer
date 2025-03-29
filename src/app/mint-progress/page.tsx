@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import MintProgressBars from '../components/MintProgressBars';
-import AddToMetaMaskButton from '../components/AddToMetaMaskButton';
+import NFTTokenManager from '../components/NFTTokenManager';
+import AdvancedOptions from '../components/AdvancedOptions';
 import { config } from '../config';
 
 export default function MintProgressPage() {
@@ -43,17 +44,15 @@ export default function MintProgressPage() {
       </div>
 
       <main>
-        <section className="mb-8">
+        {/* Two-column layout for Progress + Token Management */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <MintProgressBars refreshInterval={15000} /> {/* Refresh every 15 seconds */}
+          <NFTTokenManager />
         </section>
         
-        {/* Add to MetaMask button section */}
+        {/* Advanced Options section with MetaMask button */}
         <section className="mb-8">
-          <AddToMetaMaskButton />
-          <div className="mt-2 text-xs text-gray-400 text-center">
-            <p>Note: For proper functionality, please ensure the media files are placed in the correct locations:</p>
-            <p className="font-mono mt-1">public/images/boosterbox.png and public/videos/boosterbox.webm</p>
-          </div>
+          <AdvancedOptions />
         </section>
         
         <section className="p-6 bg-slate-800 rounded-lg mb-8">
@@ -97,13 +96,16 @@ export default function MintProgressPage() {
               <h3 className="mb-2 font-medium">Contract Information:</h3>
               <div className="space-y-2">
                 <p className="font-mono text-xs break-all">
-                  <span className="text-gray-300">Address:</span> 0x0CA9229a48a154C62F8398e52a8fE082E9587D19
+                  <span className="text-gray-300">Minting Contract:</span> 0x0CA9229a48a154C62F8398e52a8fE082E9587D19
+                </p>
+                <p className="font-mono text-xs break-all">
+                  <span className="text-gray-300">NFT Token Contract:</span> 0xc27cE0A37721db61375AF30c5b2D9Ca107f73264
                 </p>
                 <p>
                   <span className="text-gray-300">Network:</span> AnimeChain
                 </p>
                 <p>
-                  <span className="text-gray-300">Contract Type:</span> ERC-721 NFT Sale Contract
+                  <span className="text-gray-300">Contract Type:</span> ERC-1155 NFT
                 </p>
                 <p>
                   <a 
@@ -112,7 +114,20 @@ export default function MintProgressPage() {
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300 inline-flex items-center"
                   >
-                    <span>View on AnimeChain Explorer</span>
+                    <span>View Mint Contract on Explorer</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </p>
+                <p>
+                  <a 
+                    href="https://explorer-animechain-39xf6m45e3.t.conduit.xyz/token/0xc27cE0A37721db61375AF30c5b2D9Ca107f73264?tab=read_write_contract"
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 inline-flex items-center"
+                  >
+                    <span>View NFT Token on Explorer</span>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
