@@ -9,6 +9,7 @@ import BridgeInterface from "./components/BridgeInterface";
 import ERC20DepositInterface from "./components/ERC20DepositInterface";
 import { useState } from "react";
 import { config } from "./config";
+import Link from "next/link";
 
 // Main content component that uses the Web3 context
 function MainContent() {
@@ -39,12 +40,21 @@ function MainContent() {
           </div>
           
           <div className="mt-4 md:mt-0">
-            <button
-              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors text-sm"
-            >
-              {showAdvancedOptions ? "Hide Advanced Options" : "Show Advanced Options"}
-            </button>
+            <div className="flex space-x-2">
+              <Link
+                href="/mint-progress"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors text-sm"
+              >
+                NFT Mint Progress
+              </Link>
+              
+              <button
+                onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-md transition-colors text-sm"
+              >
+                {showAdvancedOptions ? "Hide Advanced Options" : "Show Advanced Options"}
+              </button>
+            </div>
           </div>
         </div>
         
@@ -127,6 +137,12 @@ function MainContent() {
             >
               Configuration
             </button>
+            <Link
+              href="/mint-progress"
+              className="py-2 px-4 border-b-2 font-medium text-sm border-transparent hover:border-green-500 hover:text-green-400 text-green-300"
+            >
+              NFT Mint Progress
+            </Link>
           </div>
         </div>
       )}
