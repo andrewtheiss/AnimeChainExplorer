@@ -32,6 +32,13 @@ const CONTRACT_ABI = [
     "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getUnusedRaffleEntries",
+    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}, {"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 
@@ -48,6 +55,7 @@ export default function MintProgressBars({ refreshInterval = 15000 }: MintProgre
   const [guaranteedMinted, setGuaranteedMinted] = useState<number>(0);
   const [totalMax, setTotalMax] = useState<number>(0);
   const [totalMinted, setTotalMinted] = useState<number>(0);
+  const [totalRaffleEntries, setTotalRaffleEntries] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -72,6 +80,14 @@ export default function MintProgressBars({ refreshInterval = 15000 }: MintProgre
     }
   }, []);
 
+  // Safely convert to number regardless of whether the result is already a number or BigNumber
+  const safeToNumber = (val: any): number => {
+    if (val == null) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val.toNumber === 'function') return val.toNumber();
+    return Number(val.toString());
+  };
+
   // Fetch data from the contract
   const fetchMintData = async () => {
     if (!contract) return;
@@ -81,26 +97,39 @@ export default function MintProgressBars({ refreshInterval = 15000 }: MintProgre
       setError(null);
       
       // Fetch all stats in parallel
-      const [guaranteedMaxRes, guaranteedMintedRes, totalMaxRes, totalMintedRes] = await Promise.all([
+      const [guaranteedMaxRes, guaranteedMintedRes, totalMaxRes, totalMintedRes, unusedRaffleEntriesRes] = await Promise.all([
         contract.guaranteedTotalMax(),
         contract.guaranteedTotalMinted(),
         contract.totalNFTMax(),
-        contract.totalNFTMinted()
+        contract.totalNFTMinted(),
+        contract.getUnusedRaffleEntries()
       ]);
 
-      // Safely convert to number regardless of whether the result is already a number or BigNumber
-      const safeToNumber = (val: any): number => {
-        if (val == null) return 0;
-        if (typeof val === 'number') return val;
-        if (typeof val.toNumber === 'function') return val.toNumber();
-        return Number(val.toString());
-      };
-
+      // Calculate total raffle entries - they come as two arrays: addresses and amounts
+      // We need to sum all the amounts in the second array
+      let raffleEntriesCount = 0;
+      
+      if (Array.isArray(unusedRaffleEntriesRes) && unusedRaffleEntriesRes.length >= 2 && Array.isArray(unusedRaffleEntriesRes[1])) {
+        // Sum up all raffle entry amounts
+        raffleEntriesCount = unusedRaffleEntriesRes[1].reduce((sum, amount) => {
+          return sum + safeToNumber(amount);
+        }, 0);
+      } else if (unusedRaffleEntriesRes && unusedRaffleEntriesRes[1]) {
+        // Handle case where it might be returned as tuple rather than array
+        const amountsArray = unusedRaffleEntriesRes[1];
+        if (Array.isArray(amountsArray)) {
+          raffleEntriesCount = amountsArray.reduce((sum, amount) => {
+            return sum + safeToNumber(amount);
+          }, 0);
+        }
+      }
+      
       // Update state with results, safely handling different return types
       setGuaranteedMax(safeToNumber(guaranteedMaxRes));
       setGuaranteedMinted(safeToNumber(guaranteedMintedRes));
       setTotalMax(safeToNumber(totalMaxRes));
       setTotalMinted(safeToNumber(totalMintedRes));
+      setTotalRaffleEntries(raffleEntriesCount);
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Error fetching mint data:", err);
@@ -113,7 +142,16 @@ export default function MintProgressBars({ refreshInterval = 15000 }: MintProgre
 
   // Calculate progress percentages
   const guaranteedProgress = guaranteedMax > 0 ? (guaranteedMinted / guaranteedMax) * 100 : 0;
-  const totalProgress = totalMax > 0 ? (totalMinted / totalMax) * 100 : 0;
+  
+  // Calculate total progress, ensuring we don't exceed 100% for visualization
+  const totalMintedPercent = totalMax > 0 ? (totalMinted / totalMax) * 100 : 0;
+  
+  // Calculate raffle percentage - this is the additional percentage on top of already minted
+  const totalWithRaffleMax = Math.min(totalMinted + totalRaffleEntries, totalMax);
+  const raffleEntriesPercent = totalMax > 0 ? ((totalWithRaffleMax - totalMinted) / totalMax) * 100 : 0;
+  
+  // Combined percentage to show potential fill if all raffles are minted (capped at 100%)
+  const combinedPercent = Math.min(totalMintedPercent + raffleEntriesPercent, 100);
 
   // Format percentages to 2 decimal places
   const formatPercent = (percent: number) => {
@@ -204,28 +242,74 @@ export default function MintProgressBars({ refreshInterval = 15000 }: MintProgre
           </div>
         </div>
         
-        {/* Total NFT Progress Bar */}
+        {/* Total NFT Progress Bar with Raffle Entries */}
         <div>
           <div className="flex justify-between mb-2">
             <h3 className="text-sm font-medium">
               Total NFTs
-              {totalProgress >= 95 && 
+              {totalMintedPercent >= 95 && 
                 <span className="ml-2 text-xs px-2 py-0.5 bg-green-800 text-green-200 rounded-full">Almost Complete!</span>
               }
             </h3>
-            <span className="text-sm font-mono">{totalMinted} / {totalMax} ({formatPercent(totalProgress)}%)</span>
+            <div className="text-right">
+              <div className="text-sm font-mono">
+                {totalMinted} / {totalMax} ({formatPercent(totalMintedPercent)}%)
+              </div>
+              <div className="text-xs text-amber-300 font-mono">
+                + {totalRaffleEntries} raffle entries ({formatPercent(raffleEntriesPercent)}%)
+              </div>
+            </div>
           </div>
-          <div className="w-full bg-slate-700/60 rounded-full h-4 shadow-inner">
-            <div 
-              className={getProgressBarClasses(totalProgress)}
-              style={{ width: `${Math.min(totalProgress, 100)}%` }}
-            ></div>
+          
+          {/* Stacked progress bar showing both minted and potential raffle allocations */}
+          <div className="w-full bg-slate-700/60 rounded-full h-4 shadow-inner overflow-hidden">
+            {/* Base layer - already minted tokens */}
+            <div className="relative h-4 rounded-full overflow-hidden">
+              {/* Already minted tokens */}
+              <div 
+                className={getProgressBarClasses(totalMintedPercent)}
+                style={{ width: `${Math.min(totalMintedPercent, 100)}%` }}
+              ></div>
+              
+              {/* Potential raffle tokens layer */}
+              {raffleEntriesPercent > 0 && (
+                <div 
+                  className="absolute top-0 h-4 bg-amber-500/70 border-l border-amber-400"
+                  style={{ 
+                    left: `${Math.min(totalMintedPercent, 100)}%`,
+                    width: `${Math.min(raffleEntriesPercent, 100 - totalMintedPercent)}%` 
+                  }}
+                ></div>
+              )}
+            </div>
           </div>
+          
           <div className="flex justify-between mt-1 text-xs text-gray-400">
             <span>0%</span>
             <span>50%</span>
             <span>100%</span>
           </div>
+          
+          {/* Legend explaining the colors */}
+          <div className="flex gap-4 mt-3">
+            <div className="flex items-center">
+              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-600 to-blue-400 mr-2"></div>
+              <span className="text-xs">Minted</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-3 h-3 rounded-full bg-amber-500/70 mr-2"></div>
+              <span className="text-xs">Raffle Entries</span>
+            </div>
+          </div>
+          
+          {/* Warning if approaching or exceeding total allocation */}
+          {(totalMintedPercent + raffleEntriesPercent) > 95 && (
+            <div className="mt-3 p-2 bg-amber-900/30 border border-amber-800 rounded-md text-amber-200 text-xs">
+              Note: Total of minted NFTs plus raffle entries is approaching the maximum allocation. 
+              {(totalMintedPercent + raffleEntriesPercent) > 100 && 
+                " Not all raffle entries will be able to be fulfilled."}
+            </div>
+          )}
         </div>
       </div>
       

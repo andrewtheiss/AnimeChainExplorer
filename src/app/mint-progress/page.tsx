@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import MintProgressBars from '../components/MintProgressBars';
+import AddToMetaMaskButton from '../components/AddToMetaMaskButton';
 import { config } from '../config';
 
 export default function MintProgressPage() {
@@ -44,6 +45,15 @@ export default function MintProgressPage() {
       <main>
         <section className="mb-8">
           <MintProgressBars refreshInterval={15000} /> {/* Refresh every 15 seconds */}
+        </section>
+        
+        {/* Add to MetaMask button section */}
+        <section className="mb-8">
+          <AddToMetaMaskButton />
+          <div className="mt-2 text-xs text-gray-400 text-center">
+            <p>Note: For proper functionality, please ensure the media files are placed in the correct locations:</p>
+            <p className="font-mono mt-1">public/images/boosterbox.png and public/videos/boosterbox.webm</p>
+          </div>
         </section>
         
         <section className="p-6 bg-slate-800 rounded-lg mb-8">
