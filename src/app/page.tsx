@@ -221,19 +221,6 @@ function MainContent() {
               <NFTTokenManager />
             </section>
             
-            {/* Note about Azuki team reservations */}
-            <div className="p-4 bg-amber-900/30 border border-amber-800 rounded-md text-amber-200 text-sm mb-8">
-              <div className="flex items-start">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <p className="font-medium mb-1">Note about Total Allocation</p>
-                  <p>There is a section NOT accounted for in the progress bars above, as the Azuki team is reserving some alpha packs for giveaways.</p>
-                </div>
-              </div>
-            </div>
-            
             {/* Advanced Options section with MetaMask button */}
             <section className="mb-8">
               <AdvancedOptions />
